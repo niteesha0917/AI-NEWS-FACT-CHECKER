@@ -62,7 +62,7 @@ export default function CheckNews() {
       <main className="sidebar-layout">
 
         {/* Page Header */}
-        <header style={{ marginBottom: 40, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <header className="dashboard-header" style={{ marginBottom: 40, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
             <div className="text-label-sm" style={{ color: 'var(--color-primary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>
               Verification Engine
@@ -84,13 +84,13 @@ export default function CheckNews() {
           </button>
         </header>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 32, maxWidth: 1100 }}>
+        <div className="check-news-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 32, maxWidth: 1100 }}>
 
           {/* Main Input Card */}
           <div>
             <div className="card card-elevated" style={{ marginBottom: 24 }}>
               {/* Input tabs */}
-              <div style={{
+              <div className="input-tabs-wrapper" style={{
                 display: 'flex', gap: 0, marginBottom: 24,
                 borderBottom: '1px solid var(--color-outline-variant)', paddingBottom: 0,
               }}>

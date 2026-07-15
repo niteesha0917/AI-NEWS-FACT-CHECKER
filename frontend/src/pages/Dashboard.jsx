@@ -354,7 +354,7 @@ export default function Dashboard() {
     return (
       <>
         {/* Header */}
-        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 40 }}>
+        <header className="dashboard-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 40 }}>
           <div>
             <div className="text-label-sm" style={{ color: 'var(--color-primary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>
               Analyst Workspace
@@ -368,7 +368,7 @@ export default function Dashboard() {
                 : 'Loading your workspace...'}
             </p>
           </div>
-          <div style={{ display: 'flex', gap: 12 }}>
+          <div className="dashboard-header-search-wrapper" style={{ display: 'flex', gap: 12 }}>
             <div style={{ position: 'relative' }}>
               <span className="material-symbols-outlined" style={{
                 position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)',
@@ -390,13 +390,13 @@ export default function Dashboard() {
 
         {/* KPI Cards */}
         {loading ? (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20, marginBottom: 32 }}>
+          <div className="dashboard-kpis-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20, marginBottom: 32 }}>
             {[...Array(4)].map((_, i) => (
               <div key={i} className="skeleton" style={{ height: 140, borderRadius: 12 }} />
             ))}
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20, marginBottom: 32 }}>
+          <div className="dashboard-kpis-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20, marginBottom: 32 }}>
             {[
               {
                 icon: 'fact_check', label: 'Total Analyses',
@@ -449,7 +449,7 @@ export default function Dashboard() {
         )}
 
         {/* Category Distribution + Recent */}
-        <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: 24, marginBottom: 24 }}>
+        <div className="dashboard-distribution-grid" style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: 24, marginBottom: 24 }}>
           {/* Category breakdown */}
           <div className="card card-elevated animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
             <h3 style={{ fontWeight: 700, fontSize: 16, marginBottom: 20, color: 'var(--color-on-surface)' }}>
@@ -542,7 +542,7 @@ export default function Dashboard() {
               <div key={i} className="skeleton" style={{ height: 56, marginBottom: 8 }} />
             ))
           ) : (
-            <div style={{ overflowX: 'auto' }}>
+            <div className="table-responsive" style={{ overflowX: 'auto' }}>
               <table className="data-table">
                 <thead>
                   <tr>
@@ -679,7 +679,7 @@ export default function Dashboard() {
 
         {/* Filter Card */}
         <div className="card card-elevated" style={{ padding: 24, marginBottom: 24, borderRadius: 12 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1.2fr 1fr auto', gap: 16, alignItems: 'flex-end' }}>
+          <div className="history-filters-grid" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1.2fr 1fr auto', gap: 16, alignItems: 'flex-end' }}>
             {/* Search */}
             <div>
               <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--color-on-surface-variant)', marginBottom: 8 }}>
@@ -832,7 +832,7 @@ export default function Dashboard() {
             </div>
           ) : (
             <>
-              <div style={{ overflowX: 'auto' }}>
+              <div className="table-responsive" style={{ overflowX: 'auto' }}>
                 <table className="data-table" style={{ margin: 0 }}>
                   <thead>
                     <tr style={{ background: 'var(--color-surface-container-low)', borderBottom: '1px solid var(--color-outline-variant)' }}>
@@ -1160,7 +1160,7 @@ export default function Dashboard() {
         </header>
 
         {/* ── Top 3 KPI Grid ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20, marginBottom: 24 }}>
+        <div className="analytics-kpis-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20, marginBottom: 24 }}>
           {/* Claim Processed Card */}
           <div className="card card-elevated" style={{ borderRadius: 12, padding: '24px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
@@ -1217,7 +1217,7 @@ export default function Dashboard() {
         </div>
 
         {/* ── Row 1: Accuracy Trends + Credibility Distribution ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 24, marginBottom: 24 }}>
+        <div className="analytics-charts-grid" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 24, marginBottom: 24 }}>
           {/* Verification Accuracy Trends */}
           <div className="card card-elevated" style={{ borderRadius: 12, padding: 24 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
@@ -1359,7 +1359,7 @@ export default function Dashboard() {
         </div>
 
         {/* ── Row 3: Top Sources + Audit Trail ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+        <div className="profile-fields-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
           {/* Top Misinformation Sources */}
           <div className="card card-elevated" style={{ borderRadius: 12, padding: 24 }}>
             <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--color-on-surface)', marginBottom: 20 }}>Top Verified Sources</h3>
@@ -1586,7 +1586,7 @@ export default function Dashboard() {
 
         {/* ── Footer ── */}
         <hr style={{ border: 'none', borderTop: '1px solid var(--color-outline-variant)', margin: '48px 0 24px', opacity: 0.5 }} />
-        <footer style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--color-on-surface-variant)', fontSize: 11, fontWeight: 500 }}>
+        <footer className="dashboard-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--color-on-surface-variant)', fontSize: 11, fontWeight: 500 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontWeight: 800, color: 'var(--color-primary)' }}>Veritas AI</span>
             <span>|</span>

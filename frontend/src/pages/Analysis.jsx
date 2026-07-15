@@ -114,7 +114,7 @@ export default function Analysis() {
       <main className="sidebar-layout">
 
         {/* ── Breadcrumbs ── */}
-        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 40 }}>
+        <header className="dashboard-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 40 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--color-on-surface-variant)', fontSize: 14 }}>
             <span
               style={{ cursor: 'pointer', color: 'var(--color-primary)' }}
@@ -139,7 +139,7 @@ export default function Analysis() {
 
           {/* ── Hero Result Card ── */}
           <div className="card card-elevated animate-fade-in-up" style={{ marginBottom: 24, padding: 40 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 40, alignItems: 'center' }}>
+            <div className="analysis-hero-grid" style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 40, alignItems: 'center' }}>
               <div>
                 <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
                   <div
@@ -391,7 +391,7 @@ export default function Analysis() {
                   };
                   const stanceColor = stanceColors[source.stance] || '#737686';
                   return (
-                    <div key={i} style={{
+                    <div key={i} className="analysis-source-card" style={{
                       display: 'grid', gridTemplateColumns: '1fr auto',
                       gap: 20, padding: 20, background: 'var(--color-surface-container-low)',
                       borderRadius: 10, alignItems: 'start',
@@ -436,7 +436,7 @@ export default function Analysis() {
           )}
 
           {/* ── Action Footer ── */}
-          <div className="animate-fade-in-up" style={{ display: 'flex', gap: 16, justifyContent: 'center', paddingTop: 20, animationDelay: '0.3s' }}>
+          <div className="analysis-action-footer animate-fade-in-up" style={{ display: 'flex', gap: 16, justifyContent: 'center', paddingTop: 20, animationDelay: '0.3s' }}>
             <button className="btn btn-primary" onClick={() => navigate('/check')}>
               <span className="material-symbols-outlined">add</span>
               New Analysis
