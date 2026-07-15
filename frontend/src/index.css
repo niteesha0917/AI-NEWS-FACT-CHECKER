@@ -1405,6 +1405,18 @@ input, textarea {
     padding: 72px 16px 60px !important;
   }
 
+  /* Sidebar Drawer Override */
+  .sidebar {
+    animation: none !important;
+    transform: translateX(-100%) !important;
+    transition: transform var(--transition-slow) !important;
+    z-index: 50 !important;
+  }
+
+  .sidebar.open {
+    transform: translateX(0) !important;
+  }
+
   /* Dashboard Header */
   .dashboard-header {
     flex-direction: column !important;
