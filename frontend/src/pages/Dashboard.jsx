@@ -360,11 +360,11 @@ export default function Dashboard() {
               Analyst Workspace
             </div>
             <h1 className="text-display-lg" style={{ fontSize: 36, color: 'var(--color-on-surface)', marginBottom: 8 }}>
-              Welcome back, Analyst.
+              Welcome back, {profileName || 'Analyst'}.
             </h1>
             <p className="text-ui-body" style={{ color: 'var(--color-on-surface-variant)' }}>
-              {stats?.flaggedHighPriority
-                ? `${stats.flaggedHighPriority} flagged high-priority reports need verification today.`
+              {stats
+                ? `${stats.flaggedHighPriority || 0} flagged high-priority reports need verification today.`
                 : 'Loading your workspace...'}
             </p>
           </div>

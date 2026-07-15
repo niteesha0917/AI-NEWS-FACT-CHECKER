@@ -18,7 +18,21 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response.data,
   (error) => {
-    const message = error.response?.data?.error || error.message || 'Request failed';
+    console.error('API request failed:', error);
+    let message = error.response?.data?.error || error.response?.data?.message;
+
+    if (!message) {
+      if (!error.response) {
+        if (error.code === 'ECONNABORTED') {
+          message = 'Request timed out. Please make sure the backend is running and reachable on port 5000.';
+        } else {
+          message = 'Backend server is unreachable. Please make sure the backend is running on port 5000 (run start.bat to start both servers).';
+        }
+      } else {
+        message = error.response?.statusText || error.message || 'Request failed';
+      }
+    }
+
     return Promise.reject(new Error(message));
   }
 );

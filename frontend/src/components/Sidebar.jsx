@@ -30,7 +30,7 @@ export default function Sidebar() {
   // Dynamic user data from localStorage
   const storedUser = JSON.parse(localStorage.getItem('user') || 'null');
   const displayName = storedUser?.fullName || 'Veritas Pro';
-  const displayOrg = 'Lead Investigator';
+  const displayOrg = storedUser?.organization || 'Lead Investigator';
   const initials = displayName
     .split(' ')
     .filter(Boolean)

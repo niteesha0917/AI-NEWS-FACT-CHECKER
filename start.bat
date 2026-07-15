@@ -55,14 +55,14 @@ if errorlevel 1 (
 echo.
 echo [3/4] Starting Backend server (port 5000)...
 cd /d "%~dp0backend"
-start "Veritas Backend :5000" cmd /k "set PATH=%NODE_PATH%;%PATH% && node server.js"
+start "Veritas Backend :5000" cmd /k "node server.js"
 
 echo Waiting for backend to initialize...
 timeout /t 3 >nul
 
 echo [4/4] Starting Frontend dev server (port 5173)...
 cd /d "%~dp0frontend"
-start "Veritas Frontend :5173" cmd /k "set PATH=%NODE_PATH%;%PATH% && "%NPM%" run dev"
+start "Veritas Frontend :5173" cmd /k "npm run dev"
 
 echo.
 echo  ================================================
