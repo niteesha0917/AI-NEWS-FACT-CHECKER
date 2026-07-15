@@ -45,8 +45,8 @@ export default function Sidebar() {
     <>
       {/* Mobile Top Bar */}
       <div className="mobile-header-bar">
-        <button className="mobile-menu-btn" onClick={() => setIsOpen(true)}>
-          <span className="material-symbols-outlined">menu</span>
+        <button className="mobile-menu-btn" onClick={() => setIsOpen(true)} aria-label="Open Menu">
+          <span style={{ fontSize: '24px', lineHeight: '24px', display: 'block' }}>☰</span>
         </button>
         <div className="mobile-header-title">Veritas AI</div>
         <div style={{ width: 44 }}></div>
@@ -60,8 +60,8 @@ export default function Sidebar() {
       <aside className={`sidebar animate-slide-in-left ${isOpen ? 'open' : ''}`}>
         {/* Mobile Close Button */}
         <div className="sidebar-mobile-close">
-          <button className="mobile-menu-btn" onClick={() => setIsOpen(false)}>
-            <span className="material-symbols-outlined">close</span>
+          <button className="mobile-menu-btn" onClick={() => setIsOpen(false)} aria-label="Close Menu">
+            <span style={{ fontSize: '20px', lineHeight: '20px', display: 'block', fontWeight: 600 }}>✕</span>
           </button>
         </div>
 
