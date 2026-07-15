@@ -1,6 +1,26 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+// ── First-Login Detection Helpers ──────────────────────────────────────────────
+// Returns true if this email has never been seen before (first-time user).
+// Also registers the email so subsequent logins are detected as returning.
+function checkAndRegisterEmail(email) {
+  const key = 'veritasRegisteredEmails';
+  let registered = [];
+  try {
+    registered = JSON.parse(localStorage.getItem(key) || '[]');
+  } catch (_) {
+    registered = [];
+  }
+  const normalizedEmail = (email || '').toLowerCase().trim();
+  const isNew = !registered.includes(normalizedEmail);
+  if (isNew && normalizedEmail) {
+    registered.push(normalizedEmail);
+    localStorage.setItem(key, JSON.stringify(registered));
+  }
+  return isNew;
+}
+
 export default function Signup() {
   const navigate = useNavigate();
 
@@ -23,7 +43,8 @@ export default function Signup() {
       const params = new URLSearchParams(cleanHash);
       const email = params.get('email') || (params.get('access_token') ? 'google-oauth-user@gmail.com' : null);
       if (email) {
-        // Log in user
+        // Log in user — detect first-time vs returning
+        const isNewUser = checkAndRegisterEmail(email);
         const nameFromEmail = email.split('@')[0];
         const cleanName = nameFromEmail.charAt(0).toUpperCase() + nameFromEmail.slice(1);
         localStorage.setItem(
@@ -32,6 +53,7 @@ export default function Signup() {
             fullName: cleanName,
             email: email,
             organization: 'Google Account User',
+            isNewUser,
           })
         );
         // Clean URL hash/query
@@ -104,23 +126,28 @@ export default function Signup() {
     e.preventDefault();
     if (validateForm()) {
       if (isLogin) {
-        // Sign In logic
+        // Sign In logic — always a returning user for the sign-in path
         const storedUser = JSON.parse(localStorage.getItem('user') || 'null');
         if (storedUser && storedUser.email === formData.email) {
+          // Already stored; update isNewUser to false (returning session)
+          localStorage.setItem('user', JSON.stringify({ ...storedUser, isNewUser: false }));
           navigate('/dashboard');
         } else if (formData.email === 'alexander@news-org.com') {
           // Google Simulated OAuth Hamilton Log In
+          const isNewUser = checkAndRegisterEmail('alexander@news-org.com');
           localStorage.setItem(
             'user',
             JSON.stringify({
               fullName: 'Alexander Hamilton',
               email: 'alexander@news-org.com',
               organization: 'Global Press Collective',
+              isNewUser,
             })
           );
           navigate('/dashboard');
         } else {
           // Auto register / login new user session
+          const isNewUser = checkAndRegisterEmail(formData.email);
           const nameFromEmail = formData.email.split('@')[0];
           const cleanName = nameFromEmail.charAt(0).toUpperCase() + nameFromEmail.slice(1);
           localStorage.setItem(
@@ -129,18 +156,21 @@ export default function Signup() {
               fullName: cleanName,
               email: formData.email,
               organization: 'Veritas Pro Analyst',
+              isNewUser,
             })
           );
           navigate('/dashboard');
         }
       } else {
-        // Sign Up logic
+        // Sign Up logic — always a new user registration
+        checkAndRegisterEmail(formData.email); // register email
         localStorage.setItem(
           'user',
           JSON.stringify({
             fullName: formData.fullName,
             email: formData.email,
             organization: formData.organization,
+            isNewUser: true,
           })
         );
         navigate('/dashboard');
@@ -168,10 +198,12 @@ export default function Signup() {
         setShowGoogleChooser(true);
       }
     } else {
+      const isNewUser = checkAndRegisterEmail('thomas@press-agency.org');
       const dummyUser = {
         fullName: 'Thomas Jefferson',
         email: 'thomas@press-agency.org',
         organization: 'Continental Gazette',
+        isNewUser,
       };
       localStorage.setItem('user', JSON.stringify(dummyUser));
       navigate('/dashboard');
@@ -511,10 +543,12 @@ export default function Signup() {
                   <button
                     className="google-account-item"
                     onClick={() => {
+                      const isNewUser = checkAndRegisterEmail('alexander@news-org.com');
                       const userObj = {
                         fullName: 'Alexander Hamilton',
                         email: 'alexander@news-org.com',
                         organization: 'Global Press Collective',
+                        isNewUser,
                       };
                       localStorage.setItem('user', JSON.stringify(userObj));
                       navigate('/dashboard');
@@ -531,10 +565,12 @@ export default function Signup() {
                   <button
                     className="google-account-item"
                     onClick={() => {
+                      const isNewUser = checkAndRegisterEmail('benjamin@penn-gazette.org');
                       const userObj = {
                         fullName: 'Benjamin Franklin',
                         email: 'benjamin@penn-gazette.org',
                         organization: 'Pennsylvania Gazette',
+                        isNewUser,
                       };
                       localStorage.setItem('user', JSON.stringify(userObj));
                       navigate('/dashboard');
@@ -567,12 +603,14 @@ export default function Signup() {
                   onSubmit={(e) => {
                     e.preventDefault();
                     if (googleFormEmail.trim()) {
+                      const isNewUser = checkAndRegisterEmail(googleFormEmail);
                       const nameFromEmail = googleFormEmail.split('@')[0];
                       const cleanName = googleFormName.trim() || (nameFromEmail.charAt(0).toUpperCase() + nameFromEmail.slice(1));
                       const userObj = {
                         fullName: cleanName,
                         email: googleFormEmail,
                         organization: 'Google Account Workspace',
+                        isNewUser,
                       };
                       localStorage.setItem('user', JSON.stringify(userObj));
                       navigate('/dashboard');

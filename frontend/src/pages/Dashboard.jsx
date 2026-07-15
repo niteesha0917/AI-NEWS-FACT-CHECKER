@@ -65,6 +65,7 @@ export default function Dashboard() {
   const [profileEmail, setProfileEmail] = useState('');
   const [profileOrg, setProfileOrg] = useState('');
   const [profileSaved, setProfileSaved] = useState(false);
+  const [isNewUser, setIsNewUser] = useState(false);
 
   // Settings states
   const [aiConsensus, setAiConsensus] = useState(true);
@@ -88,6 +89,16 @@ export default function Dashboard() {
     setProfileName(user.fullName || 'Veritas Pro');
     setProfileEmail(user.email || 'pro.analyst@veritas.ai');
     setProfileOrg(user.organization || 'Verified Analyst');
+
+    // Detect first-time login vs returning user
+    if (user.isNewUser === true) {
+      setIsNewUser(true);
+      // Clear the flag so subsequent dashboard visits show "Welcome back"
+      const updatedUser = { ...user, isNewUser: false };
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+    } else {
+      setIsNewUser(false);
+    }
 
     const settings = JSON.parse(localStorage.getItem('settings') || 'null');
     if (settings) {
@@ -360,7 +371,9 @@ export default function Dashboard() {
               Analyst Workspace
             </div>
             <h1 className="text-display-lg" style={{ fontSize: 36, color: 'var(--color-on-surface)', marginBottom: 8 }}>
-              Welcome back, {profileName || 'Analyst'}.
+              {isNewUser
+                ? `Welcome, ${profileName || 'Analyst'}!`
+                : `Welcome back, ${profileName || 'Analyst'}.`}
             </h1>
             <p className="text-ui-body" style={{ color: 'var(--color-on-surface-variant)' }}>
               {stats
