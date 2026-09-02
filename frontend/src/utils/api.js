@@ -37,16 +37,32 @@ api.interceptors.response.use(
   }
 );
 
+// ── Auth API ────────────────────────────────────────────────
+export const authAPI = {
+  register: (userData) => api.post('/auth/register', userData),
+  login: (credentials) => api.post('/auth/login', credentials),
+  sync: (profile) => api.post('/auth/sync', profile),
+};
+
 // ── Fact-Check API ──────────────────────────────────────────
 export const factCheckAPI = {
-  submit: (content, inputType = 'text', title) =>
-    api.post('/factcheck', { content, inputType, title }),
+  submit: (content, inputType = 'text', title, userInfo = {}) =>
+    api.post('/factcheck', { content, inputType, title, ...userInfo }),
+
+  summarize: (content, category) =>
+    api.post('/factcheck/summarize', { content, category }),
+
+  searchEvidence: (q, category) =>
+    api.get('/factcheck/evidence/search', { params: { q, category } }),
 
   getById: (id) =>
     api.get(`/factcheck/${id}`),
 
   getHistory: (params = {}) =>
     api.get('/factcheck/history', { params }),
+
+  getLiveFeed: (params = {}) =>
+    api.get('/factcheck/live-feed', { params }),
 
   bulkDelete: (ids) =>
     api.post('/factcheck/bulk-delete', { ids }),

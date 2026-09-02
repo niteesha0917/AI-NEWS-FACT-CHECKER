@@ -22,6 +22,10 @@ function App() {
       <Routes>
         <Route path="/" element={<Signup />} />
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/history" element={<Navigate to="/dashboard?tab=history" replace />} />
+        <Route path="/analytics" element={<Navigate to="/dashboard?tab=analytics" replace />} />
+        <Route path="/profile" element={<Navigate to="/dashboard?tab=profile" replace />} />
+        <Route path="/settings" element={<Navigate to="/dashboard?tab=settings" replace />} />
         <Route path="/check" element={<CheckNews />} />
         <Route path="/analysis/:id" element={<Analysis />} />
         <Route path="/about" element={<About />} />

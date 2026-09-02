@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url';
 
 import factcheckRoutes from './routes/factcheck.js';
 import dashboardRoutes from './routes/dashboard.js';
+import authRoutes from './routes/auth.js';
 
 dotenv.config();
 
@@ -26,9 +27,17 @@ app.use(morgan('dev'));
 
 // ─── MongoDB Connection ────────────────────────────────────────────────────────
 const connectDB = async () => {
+  const uri = process.env.MONGODB_URI;
+  if (!uri || uri.includes('<db_password>')) {
+    console.log('\n⚠️  MongoDB Note: MongoDB URI is set to Atlas, but contains `<db_password>`.');
+    console.log('👉 Please edit backend/.env and replace `<db_password>` with your real MongoDB Atlas password.');
+    console.log('💾 Running in hybrid mock-data mode until password is provided.\n');
+    return;
+  }
+
   try {
-    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/verifact');
-    console.log('✅ MongoDB connected successfully');
+    await mongoose.connect(uri);
+    console.log('✅ MongoDB connected successfully to database:', mongoose.connection.name || 'verifact');
   } catch (err) {
     console.error('❌ MongoDB connection failed:', err.message);
     console.log('⚠️  Running in mock-data mode (MongoDB unavailable)');
@@ -38,6 +47,7 @@ const connectDB = async () => {
 connectDB();
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
+app.use('/api/auth', authRoutes);
 app.use('/api/factcheck', factcheckRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 

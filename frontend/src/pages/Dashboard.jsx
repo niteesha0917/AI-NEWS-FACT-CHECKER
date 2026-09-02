@@ -205,7 +205,7 @@ export default function Dashboard() {
 
   // In-memory filter fallback when backend is unavailable or offline
   const getClientFilteredMockHistory = () => {
-    let list = getMockHistoryData();
+    let list = historyList || [];
 
     if (appliedFilters.search) {
       const s = appliedFilters.search.toLowerCase();
@@ -246,7 +246,7 @@ export default function Dashboard() {
     return {
       data,
       total,
-      pages: Math.ceil(total / historyLimit),
+      pages: Math.ceil(total / historyLimit) || 1,
     };
   };
 
@@ -296,15 +296,20 @@ export default function Dashboard() {
     if (!window.confirm(`Are you sure you want to delete the ${selectedIds.length} selected analyses?`)) return;
     try {
       await factCheckAPI.bulkDelete(selectedIds);
+      setHistoryList(prev => prev.filter(item => !selectedIds.includes(item._id)));
+      setHistoryTotal(prev => Math.max(0, prev - selectedIds.length));
+      setSelectedIds([]);
+      // Update stats and recent list
+      const [statsRes, recentRes] = await Promise.all([
+        dashboardAPI.getStats(),
+        dashboardAPI.getRecent(),
+      ]);
+      setStats(statsRes.data);
+      setRecent(recentRes.data);
     } catch (err) {
-      console.log('Backend bulk delete mock execution.');
+      console.error('Bulk delete error:', err);
+      alert(err.message || 'Failed to delete selected records.');
     }
-    // Filter out of current views local states
-    setHistoryList(historyList.filter(item => !selectedIds.includes(item._id)));
-    setHistoryTotal(prev => Math.max(0, prev - selectedIds.length));
-    setSelectedIds([]);
-    alert('Selected analyses deleted successfully.');
-    loadHistory();
   };
 
   const handleDeleteSingle = (id) => {
@@ -338,6 +343,7 @@ export default function Dashboard() {
       setStats(statsRes.data);
       setRecent(recentRes.data);
     } catch (err) {
+      console.error('Delete single error:', err);
       alert(err.message || 'Failed to delete record.');
     }
   };
@@ -356,6 +362,7 @@ export default function Dashboard() {
       setStats(statsRes.data);
       setRecent(recentRes.data);
     } catch (err) {
+      console.error('Delete all error:', err);
       alert(err.message || 'Failed to delete all history.');
     }
   };

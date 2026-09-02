@@ -121,17 +121,18 @@ function getMockStats() {
 }
 
 function getMockRecent() {
-  const userSubmissions = Array.from(mockDatabase.values()).map(item => ({
-    _id: item._id,
-    title: item.title,
-    verdict: item.verdict,
-    truthScore: item.truthScore,
-    category: item.category,
-    createdAt: item.createdAt,
-    processingTime: item.processingTime
-  }));
+  const userSubmissions = Array.from(mockDatabase.values())
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    .map(item => ({
+      _id: item._id,
+      title: item.title,
+      verdict: item.verdict,
+      truthScore: item.truthScore,
+      category: item.category || 'General',
+      createdAt: item.createdAt,
+      processingTime: item.processingTime
+    }));
 
-  // Return only real user submissions
   return userSubmissions.slice(0, 10);
 }
 

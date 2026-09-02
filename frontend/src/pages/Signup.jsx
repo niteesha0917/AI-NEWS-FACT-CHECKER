@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { authAPI } from '../utils/api';
 
 // ── First-Login Detection Helpers ──────────────────────────────────────────────
 // Returns true if this email has never been seen before (first-time user).
@@ -41,22 +42,62 @@ export default function Signup() {
     if (hash) {
       const cleanHash = hash.startsWith('#') || hash.startsWith('?') ? hash.substring(1) : hash;
       const params = new URLSearchParams(cleanHash);
-      const email = params.get('email') || (params.get('access_token') ? 'google-oauth-user@gmail.com' : null);
-      if (email) {
-        // Log in user — detect first-time vs returning
-        const isNewUser = checkAndRegisterEmail(email);
-        const nameFromEmail = email.split('@')[0];
-        const cleanName = nameFromEmail.charAt(0).toUpperCase() + nameFromEmail.slice(1);
-        localStorage.setItem(
-          'user',
-          JSON.stringify({
-            fullName: cleanName,
-            email: email,
-            organization: 'Google Account User',
-            isNewUser,
+      const accessToken = params.get('access_token');
+      const emailParam = params.get('email');
+
+      if (accessToken) {
+        // Fetch verified Google Profile
+        fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+          headers: { Authorization: `Bearer ${accessToken}` }
+        })
+          .then((res) => res.json())
+          .then(async (profile) => {
+            const userEmail = profile.email || 'google-user@gmail.com';
+            const fullName = profile.name || userEmail.split('@')[0];
+            const isNewUser = checkAndRegisterEmail(userEmail);
+
+            const userPayload = {
+              fullName,
+              email: userEmail,
+              organization: 'Google Verified User',
+              avatar: profile.picture || null,
+              isNewUser,
+            };
+
+            try {
+              await authAPI.register(userPayload);
+            } catch (_) {}
+
+            localStorage.setItem('user', JSON.stringify(userPayload));
+            window.history.replaceState(null, null, window.location.pathname);
+            navigate('/dashboard');
           })
-        );
-        // Clean URL hash/query
+          .catch(() => {
+            const isNewUser = checkAndRegisterEmail('google-user@gmail.com');
+            const userPayload = {
+              fullName: 'Google User',
+              email: 'google-user@gmail.com',
+              organization: 'Google Account User',
+              isNewUser,
+            };
+            localStorage.setItem('user', JSON.stringify(userPayload));
+            window.history.replaceState(null, null, window.location.pathname);
+            navigate('/dashboard');
+          });
+        return;
+      }
+
+      if (emailParam) {
+        const isNewUser = checkAndRegisterEmail(emailParam);
+        const nameFromEmail = emailParam.split('@')[0];
+        const cleanName = nameFromEmail.charAt(0).toUpperCase() + nameFromEmail.slice(1);
+        const userPayload = {
+          fullName: cleanName,
+          email: emailParam,
+          organization: 'Google Account User',
+          isNewUser,
+        };
+        localStorage.setItem('user', JSON.stringify(userPayload));
         window.history.replaceState(null, null, window.location.pathname);
         navigate('/dashboard');
       }
@@ -122,57 +163,69 @@ export default function Signup() {
     return Object.keys(tempErrors).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (validateForm()) {
       if (isLogin) {
         // Sign In logic — always a returning user for the sign-in path
         const storedUser = JSON.parse(localStorage.getItem('user') || 'null');
+        let userPayload = {
+          fullName: 'Veritas Pro Analyst',
+          email: formData.email,
+          organization: 'Verified Analyst',
+          isNewUser: false,
+        };
+
         if (storedUser && storedUser.email === formData.email) {
-          // Already stored; update isNewUser to false (returning session)
-          localStorage.setItem('user', JSON.stringify({ ...storedUser, isNewUser: false }));
-          navigate('/dashboard');
+          userPayload = { ...storedUser, isNewUser: false };
         } else if (formData.email === 'alexander@news-org.com') {
-          // Google Simulated OAuth Hamilton Log In
           const isNewUser = checkAndRegisterEmail('alexander@news-org.com');
-          localStorage.setItem(
-            'user',
-            JSON.stringify({
-              fullName: 'Alexander Hamilton',
-              email: 'alexander@news-org.com',
-              organization: 'Global Press Collective',
-              isNewUser,
-            })
-          );
-          navigate('/dashboard');
+          userPayload = {
+            fullName: 'Alexander Hamilton',
+            email: 'alexander@news-org.com',
+            organization: 'Global Press Collective',
+            isNewUser,
+          };
         } else {
-          // Auto register / login new user session
           const isNewUser = checkAndRegisterEmail(formData.email);
           const nameFromEmail = formData.email.split('@')[0];
           const cleanName = nameFromEmail.charAt(0).toUpperCase() + nameFromEmail.slice(1);
-          localStorage.setItem(
-            'user',
-            JSON.stringify({
-              fullName: cleanName,
-              email: formData.email,
-              organization: 'Veritas Pro Analyst',
-              isNewUser,
-            })
-          );
-          navigate('/dashboard');
+          userPayload = {
+            fullName: cleanName,
+            email: formData.email,
+            organization: 'Veritas Pro Analyst',
+            isNewUser,
+          };
         }
+
+        // Persist to MongoDB backend
+        try {
+          await authAPI.login({ email: formData.email, password: formData.password });
+        } catch (_) {}
+
+        localStorage.setItem('user', JSON.stringify(userPayload));
+        navigate('/dashboard');
       } else {
-        // Sign Up logic — always a new user registration
-        checkAndRegisterEmail(formData.email); // register email
-        localStorage.setItem(
-          'user',
-          JSON.stringify({
+        // Sign Up logic — register new user
+        checkAndRegisterEmail(formData.email);
+        const userPayload = {
+          fullName: formData.fullName,
+          email: formData.email,
+          organization: formData.organization,
+          isNewUser: true,
+        };
+
+        // Persist to MongoDB backend
+        try {
+          await authAPI.register({
             fullName: formData.fullName,
             email: formData.email,
             organization: formData.organization,
-            isNewUser: true,
-          })
-        );
+            password: formData.password
+          });
+        } catch (_) {}
+
+        localStorage.setItem('user', JSON.stringify(userPayload));
         navigate('/dashboard');
       }
     }
@@ -190,23 +243,12 @@ export default function Signup() {
           `response_type=token&` +
           `scope=openid%20profile%20email&` +
           `prompt=select_account&` +
-          `access_type=offline&` +
           `include_granted_scopes=true`;
         window.location.href = googleAuthUrl;
       } else {
         // Show simulated Google Account Chooser
         setShowGoogleChooser(true);
       }
-    } else {
-      const isNewUser = checkAndRegisterEmail('thomas@press-agency.org');
-      const dummyUser = {
-        fullName: 'Thomas Jefferson',
-        email: 'thomas@press-agency.org',
-        organization: 'Continental Gazette',
-        isNewUser,
-      };
-      localStorage.setItem('user', JSON.stringify(dummyUser));
-      navigate('/dashboard');
     }
   };
 
@@ -269,31 +311,6 @@ export default function Signup() {
             </div>
           </div>
         </div>
-
-        {/* Footer */}
-        <div className="signup-left-footer">
-          <div className="signup-left-footer-text">
-            Trusted by over 450 newsrooms globally.
-          </div>
-          <div className="signup-avatar-stack">
-            <img
-              className="signup-avatar-img"
-              src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80"
-              alt="Analyst 1"
-            />
-            <img
-              className="signup-avatar-img"
-              src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=100&q=80"
-              alt="Analyst 2"
-            />
-            <img
-              className="signup-avatar-img"
-              src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=100&q=80"
-              alt="Analyst 3"
-            />
-            <div className="signup-avatar-more">+12k</div>
-          </div>
-        </div>
       </div>
 
       {/* ── Right Column (Signup form) ── */}
@@ -338,16 +355,7 @@ export default function Signup() {
                   fill="#EA4335"
                 />
               </svg>
-              Google
-            </button>
-            <button className="signup-oauth-btn" onClick={() => handleOAuthClick('LinkedIn')}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path
-                  d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.779-1.75-1.75s.784-1.75 1.75-1.75 1.75.779 1.75 1.75-.784 1.75-1.75 1.75zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"
-                  fill="#0A66C2"
-                />
-              </svg>
-              LinkedIn
+              Sign in with Google
             </button>
           </div>
 
