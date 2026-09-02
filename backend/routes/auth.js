@@ -4,8 +4,16 @@ import User from '../models/User.js';
 
 const router = express.Router();
 
-// In-memory fallback users store
+// Stateful in-memory fallback users store
 export const mockUsers = new Map();
+
+// ─── GET /api/auth/config (Expose public OAuth client ID) ─────────────────────
+router.get('/config', (req, res) => {
+  res.json({
+    success: true,
+    googleClientId: process.env.GOOGLE_CLIENT_ID || '',
+  });
+});
 
 // ─── POST /api/auth/register (or signup) ──────────────────────────────────────
 router.post('/register', async (req, res) => {

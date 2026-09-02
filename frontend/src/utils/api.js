@@ -39,10 +39,12 @@ api.interceptors.response.use(
 
 // ── Auth API ────────────────────────────────────────────────
 export const authAPI = {
+  getConfig: () => api.get('/auth/config'),
   register: (userData) => api.post('/auth/register', userData),
   login: (credentials) => api.post('/auth/login', credentials),
   sync: (profile) => api.post('/auth/sync', profile),
 };
+
 
 // ── Fact-Check API ──────────────────────────────────────────
 export const factCheckAPI = {

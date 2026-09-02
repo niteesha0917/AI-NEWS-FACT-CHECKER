@@ -29,6 +29,18 @@ export default function Signup() {
   const [googleFormEmail, setGoogleFormEmail] = useState('');
   const [googleFormName, setGoogleFormName] = useState('');
   const [isUsingCustomGoogle, setIsUsingCustomGoogle] = useState(false);
+  const [backendGoogleClientId, setBackendGoogleClientId] = useState('');
+
+  useEffect(() => {
+    // Attempt to retrieve Google Client ID from backend runtime config
+    authAPI.getConfig()
+      .then((res) => {
+        if (res && res.googleClientId) {
+          setBackendGoogleClientId(res.googleClientId);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     // 1. Check if user is already logged in
@@ -231,10 +243,22 @@ export default function Signup() {
     }
   };
 
-  const handleOAuthClick = (provider) => {
+  const handleOAuthClick = async (provider) => {
     if (provider === 'Google') {
-      const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-      if (clientId && clientId !== 'placeholder' && !clientId.includes('mock')) {
+      let clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || backendGoogleClientId;
+
+      // If missing from build, try runtime backend fetch
+      if (!clientId || clientId === 'placeholder' || clientId.includes('mock') || clientId.includes('your_google_client_id')) {
+        try {
+          const res = await authAPI.getConfig();
+          if (res && res.googleClientId) {
+            clientId = res.googleClientId;
+            setBackendGoogleClientId(res.googleClientId);
+          }
+        } catch (_) {}
+      }
+
+      if (clientId && clientId !== 'placeholder' && !clientId.includes('mock') && !clientId.includes('your_google_client_id')) {
         // Securely redirect to Google OAuth Endpoint
         const redirectUri = import.meta.env.VITE_GOOGLE_REDIRECT_URI || `${window.location.origin}/`;
         const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
@@ -251,6 +275,7 @@ export default function Signup() {
       }
     }
   };
+
 
   return (
     <div className="signup-container">
