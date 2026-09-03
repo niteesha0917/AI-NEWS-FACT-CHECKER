@@ -11,9 +11,10 @@ export const mockUsers = new Map();
 router.get('/config', (req, res) => {
   res.json({
     success: true,
-    googleClientId: process.env.GOOGLE_CLIENT_ID || '',
+    googleClientId: process.env.GOOGLE_CLIENT_ID || '20732995217-iufsjspps43gk6b14f80te88bg7dhglp.apps.googleusercontent.com',
   });
 });
+
 
 // ─── POST /api/auth/register (or signup) ──────────────────────────────────────
 router.post('/register', async (req, res) => {

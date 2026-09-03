@@ -66,7 +66,13 @@ export default function Sidebar() {
         </div>
 
         {/* Logo */}
-        <div className="sidebar-logo" style={{ color: 'var(--color-primary)', fontWeight: 800, fontSize: '22px', fontFamily: 'var(--font-display)' }}>Veritas AI</div>
+        <div className="sidebar-logo" style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--color-primary)', fontWeight: 800, fontSize: '22px', fontFamily: 'var(--font-display)', cursor: 'pointer' }} onClick={() => navigate('/dashboard')}>
+          <svg width="28" height="28" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M24 4L7 11.5V23C7 33.4 14.3 43.1 24 45.8C33.7 43.1 41 33.4 41 23V11.5L24 4Z" fill="#004ac6" />
+            <path d="M21 31.5L14 24.5L16.8 21.7L21 25.9L31.2 15.7L34 18.5L21 31.5Z" fill="#ffffff" />
+          </svg>
+          <span>Veritas AI</span>
+        </div>
 
         {/* User Profile */}
         <div className="sidebar-user">
