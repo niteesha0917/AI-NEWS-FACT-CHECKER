@@ -150,17 +150,10 @@ export default function Signup() {
       tempErrors.email = 'Please enter a valid email address';
     }
 
-    if (!isLogin && !formData.organization.trim()) {
-      tempErrors.organization = 'Organization is required';
-    }
-
-    const specialCharRegex = /[!@#$%^&*(),.?":{}|<>]/;
     if (!formData.password) {
       tempErrors.password = 'Password is required';
-    } else if (formData.password.length < 12) {
-      tempErrors.password = 'Password must be at least 12 characters long';
-    } else if (!specialCharRegex.test(formData.password)) {
-      tempErrors.password = 'Password must contain at least one special character';
+    } else if (formData.password.length < 4) {
+      tempErrors.password = 'Password must be at least 4 characters long';
     }
 
     if (!isLogin && !formData.agreeToTerms) {
@@ -219,7 +212,7 @@ export default function Signup() {
         const userPayload = {
           fullName: formData.fullName,
           email: formData.email,
-          organization: formData.organization,
+          organization: formData.organization || 'Independent Investigator',
           isNewUser: true,
         };
 
@@ -228,7 +221,7 @@ export default function Signup() {
           await authAPI.register({
             fullName: formData.fullName,
             email: formData.email,
-            organization: formData.organization,
+            organization: formData.organization || 'Independent Investigator',
             password: formData.password
           });
         } catch (_) {}
@@ -424,25 +417,6 @@ export default function Signup() {
               {errors.email && <div className="signup-error-message">{errors.email}</div>}
             </div>
 
-            {/* Organization */}
-            {!isLogin && (
-              <div className="signup-form-group">
-                <label className="signup-form-label">Organization</label>
-                <div className="signup-input-wrapper">
-                  <span className="material-symbols-outlined signup-input-icon">corporate_fare</span>
-                  <input
-                    type="text"
-                    name="organization"
-                    value={formData.organization}
-                    onChange={handleChange}
-                    placeholder="Global Press Collective"
-                    className="signup-input-field"
-                  />
-                </div>
-                {errors.organization && <div className="signup-error-message">{errors.organization}</div>}
-              </div>
-            )}
-
             {/* Password */}
             <div className="signup-form-group">
               <label className="signup-form-label">Password</label>
@@ -453,7 +427,7 @@ export default function Signup() {
                   name="password"
                   value={formData.password}
                   onChange={handleChange}
-                  placeholder="••••••••••••"
+                  placeholder="••••••••"
                   className="signup-input-field password-input"
                 />
                 <button
@@ -467,7 +441,7 @@ export default function Signup() {
                 </button>
               </div>
               <div className="signup-hint">
-                Must be at least 12 characters with one special character.
+                Must be at least 4 characters.
               </div>
               {errors.password && <div className="signup-error-message">{errors.password}</div>}
             </div>
