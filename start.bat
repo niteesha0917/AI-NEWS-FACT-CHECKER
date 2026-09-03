@@ -62,7 +62,7 @@ timeout /t 3 >nul
 
 echo [4/4] Starting Frontend dev server (port 5173)...
 cd /d "%~dp0frontend"
-start "Veritas Frontend :5173" cmd /k "npm run dev"cgff
+start "Veritas Frontend :5173" cmd /k "npm run dev"
 
 echo.
 echo  ================================================
