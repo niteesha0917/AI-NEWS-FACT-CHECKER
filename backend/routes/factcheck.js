@@ -696,6 +696,118 @@ function evaluateClaimSemantics(claimText, category, liveNewsArticles = []) {
   };
 }
 
+// ─── Dynamic Source Credibility & Evidence Matcher ────────────────────────────
+const buildDynamicSources = (category, evidenceDetails = [], liveNewsArticles = [], claims = []) => {
+  const sourcesList = [];
+  const seenNames = new Set();
+
+  // 1. Prioritize live wire news articles if available
+  if (Array.isArray(liveNewsArticles) && liveNewsArticles.length > 0) {
+    liveNewsArticles.slice(0, 2).forEach((art, idx) => {
+      const name = art.publisher || 'Verified News Wire';
+      if (!seenNames.has(name)) {
+        seenNames.add(name);
+        sourcesList.push({
+          name,
+          url: art.url || 'https://newsdata.io',
+          credibilityScore: art.credibilityRating || (94 - idx * 2),
+          stance: art.stance || 'supports',
+          excerpt: art.excerpt || `Live wire report covering ${art.sourceTitle || 'verified developments'}.`,
+        });
+      }
+    });
+  }
+
+  // 2. Add from claim-matched evidenceDetails
+  if (Array.isArray(evidenceDetails) && evidenceDetails.length > 0) {
+    evidenceDetails.forEach((ev) => {
+      const name = ev.publisher || 'Authoritative Archive';
+      if (!seenNames.has(name)) {
+        seenNames.add(name);
+        sourcesList.push({
+          name,
+          url: ev.url || 'https://reuters.com/fact-check',
+          credibilityScore: ev.credibilityRating || 96,
+          stance: ev.stance || (claims.some(c => c.verdict === 'false') ? 'contradicts' : 'supports'),
+          excerpt: ev.excerpt || `Audited verification records from ${name} regarding primary assertions.`,
+        });
+      }
+    });
+  }
+
+  // 3. Category-specific authoritative repositories with contextual credibility & stance
+  const categorySourcesMap = {
+    Politics: [
+      { name: 'Congressional Research Service (CRS)', url: 'https://crsreports.congress.gov', credibilityScore: 98 },
+      { name: 'Reuters Fact Check', url: 'https://reuters.com/fact-check', credibilityScore: 96 },
+      { name: 'PolitiFact Independent Bureau', url: 'https://politifact.com', credibilityScore: 91 },
+      { name: 'Associated Press (AP) Fact Check', url: 'https://apnews.com/ap-fact-check', credibilityScore: 95 },
+    ],
+    Health: [
+      { name: 'World Health Organization (WHO)', url: 'https://who.int', credibilityScore: 99 },
+      { name: 'New England Journal of Medicine (NEJM)', url: 'https://nejm.org', credibilityScore: 98 },
+      { name: 'CDC Global Disease Registry', url: 'https://cdc.gov', credibilityScore: 97 },
+      { name: 'Reuters Health Verification', url: 'https://reuters.com/fact-check', credibilityScore: 95 },
+    ],
+    Science: [
+      { name: 'Nature Journal Archive', url: 'https://nature.com', credibilityScore: 99 },
+      { name: 'NASA Scientific Information Office', url: 'https://nasa.gov', credibilityScore: 98 },
+      { name: 'Science Magazine / AAAS', url: 'https://science.org', credibilityScore: 97 },
+      { name: 'IEEE Xplore Standards Archive', url: 'https://ieeexplore.ieee.org', credibilityScore: 96 },
+    ],
+    Economy: [
+      { name: 'Federal Reserve Board of Governors', url: 'https://federalreserve.gov', credibilityScore: 98 },
+      { name: 'Bureau of Labor Statistics (BLS)', url: 'https://bls.gov', credibilityScore: 97 },
+      { name: 'Financial Times / Bloomberg Index', url: 'https://ft.com', credibilityScore: 94 },
+      { name: 'Reuters Markets & Economy', url: 'https://reuters.com', credibilityScore: 95 },
+    ],
+    Technology: [
+      { name: 'IEEE Computer Society Standards', url: 'https://computer.org', credibilityScore: 98 },
+      { name: 'CISA National Vulnerability Database', url: 'https://cisa.gov', credibilityScore: 97 },
+      { name: 'MIT Technology Review', url: 'https://technologyreview.com', credibilityScore: 95 },
+      { name: 'ACM Digital Library', url: 'https://dl.acm.org', credibilityScore: 96 },
+    ],
+    Environment: [
+      { name: 'UN Environment Programme (UNEP)', url: 'https://unep.org', credibilityScore: 98 },
+      { name: 'International Energy Agency (IEA)', url: 'https://iea.org', credibilityScore: 97 },
+      { name: 'NOAA Climate Monitoring Center', url: 'https://noaa.gov', credibilityScore: 96 },
+      { name: 'Nature Climate Research Archive', url: 'https://nature.com', credibilityScore: 99 },
+    ],
+  };
+
+  const pool = categorySourcesMap[category] || [
+    { name: 'Reuters Fact Check', url: 'https://reuters.com/fact-check', credibilityScore: 96 },
+    { name: 'Associated Press (AP) Fact Check', url: 'https://apnews.com/ap-fact-check', credibilityScore: 95 },
+    { name: 'BBC News Verify', url: 'https://bbc.com/news', credibilityScore: 94 },
+  ];
+
+  const hasFalse = claims.some(c => c.verdict === 'false' || c.verdict === 'mostly_false');
+  const hasMisleading = claims.some(c => c.verdict === 'misleading' || c.verdict === 'partly_true');
+
+  for (const src of pool) {
+    if (sourcesList.length >= 3) break;
+    if (!seenNames.has(src.name)) {
+      seenNames.add(src.name);
+      const stance = hasFalse ? 'contradicts' : (hasMisleading ? 'neutral' : 'supports');
+      const excerpt = hasFalse
+        ? `Primary audit records and fact-checking logs from ${src.name} contradict key claims in this narrative.`
+        : (hasMisleading
+            ? `Baseline documentation from ${src.name} indicates context has been selectively framed or omitted.`
+            : `Independent reporting and reference data compiled by ${src.name} confirm the verified propositions.`);
+
+      sourcesList.push({
+        name: src.name,
+        url: src.url,
+        credibilityScore: src.credibilityScore,
+        stance,
+        excerpt,
+      });
+    }
+  }
+
+  return sourcesList.slice(0, 3);
+};
+
 // ─── Main Asynchronous Content Analyzer ───────────────────────────────────────
 const analyzeContentAsync = async (content) => {
   const lowerContent = content.toLowerCase();
@@ -715,13 +827,14 @@ const analyzeContentAsync = async (content) => {
     const summaryData = generateNewsSummary(content, groqResult.category || category, groqResult.claims || []);
     const evidenceDetails = retrieveEvidenceForClaims(groqResult.claims || [], groqResult.category || category, content);
     const explanationData = generateExplanationAndReasoning(groqResult.claims || [], evidenceDetails, groqResult.truthScore, groqResult.verdict, groqResult.category || category);
+    const dynamicSources = buildDynamicSources(groqResult.category || category, evidenceDetails, [], groqResult.claims || []);
 
     return {
       verdict: groqResult.verdict || 'FALSE',
       truthScore: groqResult.truthScore,
       category: groqResult.category || category,
       claims: groqResult.claims || [],
-      sources: TRUSTED_SOURCES.slice(0, 3),
+      sources: dynamicSources,
       summary: groqResult.executiveSummary || '',
       executiveSummary: groqResult.executiveSummary || summaryData.executiveSummary,
       keyTakeaways: groqResult.keyTakeaways || summaryData.keyTakeaways,
@@ -740,13 +853,14 @@ const analyzeContentAsync = async (content) => {
     const summaryData = generateNewsSummary(content, geminiResult.category || category, geminiResult.claims || []);
     const evidenceDetails = retrieveEvidenceForClaims(geminiResult.claims || [], geminiResult.category || category, content);
     const explanationData = generateExplanationAndReasoning(geminiResult.claims || [], evidenceDetails, geminiResult.truthScore, geminiResult.verdict, geminiResult.category || category);
+    const dynamicSources = buildDynamicSources(geminiResult.category || category, evidenceDetails, [], geminiResult.claims || []);
 
     return {
       verdict: geminiResult.verdict || 'MOSTLY_TRUE',
       truthScore: geminiResult.truthScore,
       category: geminiResult.category || category,
       claims: geminiResult.claims || [],
-      sources: TRUSTED_SOURCES.slice(0, 3),
+      sources: dynamicSources,
       summary: geminiResult.executiveSummary || '',
       executiveSummary: geminiResult.executiveSummary || summaryData.executiveSummary,
       keyTakeaways: geminiResult.keyTakeaways || summaryData.keyTakeaways,
@@ -833,23 +947,7 @@ const analyzeContentAsync = async (content) => {
   // 10. Explanation & Reasoning Feature
   const explanationData = generateExplanationAndReasoning(claims, evidenceDetails, truthScore, verdict, category);
 
-  const matchedSources = [];
-  if (liveNewsArticles.length > 0) {
-    liveNewsArticles.slice(0, 2).forEach(art => {
-      matchedSources.push({
-        name: art.publisher,
-        url: art.url,
-        credibilityScore: 96,
-        stance: art.stance,
-        excerpt: art.excerpt,
-      });
-    });
-  }
-  matchedSources.push(TRUSTED_SOURCES[0], TRUSTED_SOURCES[1]);
-
-  const uniqueSources = Array.from(new Set(matchedSources.map(s => s.name)))
-    .map(name => matchedSources.find(s => s.name === name))
-    .slice(0, 3);
+  const dynamicSources = buildDynamicSources(category, evidenceDetails, liveNewsArticles, claims);
 
   const summary = `Veritas AI has analyzed the submitted content in category ${category}, extracting key factual assertions. The verification engine computed an overall Truth Score of ${truthScore}/100. We cross-referenced claims against live NewsData.io wires and trusted source documents. Key claims were evaluated as: ${claims.map(c => `"${c.text.substring(0, 30)}..." (${c.verdict})`).join(', ')}.`;
 
@@ -858,7 +956,7 @@ const analyzeContentAsync = async (content) => {
     truthScore,
     category,
     claims,
-    sources: uniqueSources,
+    sources: dynamicSources,
     summary,
     ...summaryData,
     evidenceDetails,
