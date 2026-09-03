@@ -539,13 +539,16 @@ function evaluateClaimSemantics(claimText, category, liveNewsArticles = []) {
   // 2. Clickbait / Sensationalism Triggers
   const isClickbait = /\b(shocking|you won't believe|doctors hate this|secret they hide|100% cure|guaranteed overnight|secret formula|banned from the internet|miraculous)\b/i.test(lower);
 
-  // 3. Factual Grounding Indicators
+  // 3. Phishing / Financial Scams / Fake Schemes / Allowance Hoaxes
+  const isScamOrHoax = /\b(free money|free allowance|monthly allowance for every|register using aadhaar|aadhaar number on a new|giveaway|lottery|guaranteed payout|click to claim|register on website to get|transfer to bank account|free ₹|free rs|free 10,000|free 5,000|10000 monthly|allowance for every college student|free laptop|free recharge|modi cheated|modi.*scam)\b/i.test(lower);
+
+  // 4. Factual Grounding Indicators
   const hasNumbers = /\d+/.test(claimText);
-  const hasCurrencyOrPercent = /%|percent|\$|dollar|billion|million|euro/i.test(claimText);
+  const hasCurrencyOrPercent = /%|percent|\$|dollar|billion|million|euro|₹|rupees/i.test(claimText);
   const hasAttribution = /\b(according to|study published|announced that|official report|statement from|reuters|ap news|bbc|who|fda|nasa|cdc|reserve|bureau|ministry)\b/i.test(lower);
   const cleanWords = claimText.replace(/[^a-zA-Z0-9\s]/g, ' ').toLowerCase().split(/\s+/).filter(w => w.length > 3);
 
-  // 4. Live News Matching
+  // 5. Live News Matching
   let liveMatch = null;
   if (Array.isArray(liveNewsArticles) && liveNewsArticles.length > 0) {
     liveMatch = liveNewsArticles.find(art => {
@@ -555,29 +558,29 @@ function evaluateClaimSemantics(claimText, category, liveNewsArticles = []) {
     });
   }
 
-  let verdict = 'mostly_true';
-  let evidenceStatus = 'Partially Supported';
-  let confidence = 86;
+  let verdict = 'unverified';
+  let evidenceStatus = 'Not Verifiable';
+  let confidence = 80;
   let penalty = 0;
   let bonus = 0;
 
-  if (isConspiracy) {
+  if (isConspiracy || isScamOrHoax) {
     verdict = 'false';
     evidenceStatus = 'Contradicts';
     confidence = 96;
-    penalty = 55;
+    penalty = 60;
   } else if (isClickbait) {
     verdict = 'misleading';
     evidenceStatus = 'Partially Supported';
     confidence = 90;
-    penalty = 30;
+    penalty = 35;
   } else if (liveMatch) {
     const isDebunk = /\b(fact check|false claim|hoax|myth|rumor|fake|debunk|misleading|untrue)\b/i.test(liveMatch.sourceTitle || '');
     if (isDebunk) {
       verdict = 'false';
       evidenceStatus = 'Contradicts';
       confidence = 95;
-      penalty = 45;
+      penalty = 50;
     } else {
       verdict = 'true';
       evidenceStatus = 'Fully Supported';
@@ -585,20 +588,20 @@ function evaluateClaimSemantics(claimText, category, liveNewsArticles = []) {
       bonus = 20;
     }
   } else if (hasAttribution && hasNumbers) {
-    verdict = 'true';
-    evidenceStatus = 'Fully Supported';
-    confidence = 91;
-    bonus = 15;
-  } else if (hasNumbers || hasCurrencyOrPercent) {
     verdict = 'mostly_true';
     evidenceStatus = 'Partially Supported';
-    confidence = 88;
-    bonus = 10;
+    confidence = 82;
+    bonus = 5;
+  } else if (hasNumbers || hasCurrencyOrPercent) {
+    verdict = 'unverified';
+    evidenceStatus = 'Not Verifiable';
+    confidence = 72;
+    penalty = 10;
   } else if (cleanWords.length < 3) {
     verdict = 'not_enough_evidence';
     evidenceStatus = 'Not Verifiable';
     confidence = 70;
-    penalty = 12;
+    penalty = 15;
   }
 
   let explanation = '';
@@ -914,14 +917,14 @@ const analyzeContentAsync = async (content) => {
   });
 
   // 7. Calculate realistic Truth Score based on semantic evaluation & evidence
-  let baseScore = 88;
+  let baseScore = 72;
   claims.forEach(c => {
-    if (c.verdict === 'false') baseScore -= 38;
-    else if (c.verdict === 'misleading') baseScore -= 22;
-    else if (c.verdict === 'partly_true') baseScore -= 12;
-    else if (c.verdict === 'not_enough_evidence') baseScore -= 15;
-    else if (c.verdict === 'mostly_true') baseScore -= 4;
-    else if (c.verdict === 'true') baseScore += 5;
+    if (c.verdict === 'false') baseScore -= 46;
+    else if (c.verdict === 'misleading') baseScore -= 26;
+    else if (c.verdict === 'partly_true') baseScore -= 14;
+    else if (c.verdict === 'not_enough_evidence' || c.verdict === 'unverified') baseScore -= 18;
+    else if (c.verdict === 'mostly_true') baseScore += 4;
+    else if (c.verdict === 'true') baseScore += 10;
   });
 
   // Apply bonus/penalty
