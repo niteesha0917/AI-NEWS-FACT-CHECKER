@@ -43,6 +43,46 @@ export default function CheckNews() {
   const [newsCategory, setNewsCategory] = useState('All');
   const [newsProvider, setNewsProvider] = useState('Live Multi-Tier');
   const fileRef = useRef(null);
+  const hasAutoSubmitted = useRef(false);
+
+  const executeAnalysis = async (contentToAnalyze, tabToUse, modeToUse) => {
+    const text = (contentToAnalyze !== undefined && contentToAnalyze !== null ? contentToAnalyze : content).trim();
+    const tab = tabToUse || activeTab;
+    const mode = modeToUse || analysisMode;
+
+    if (!text || text.length < 10) {
+      setError('Please enter at least 10 characters to analyze.');
+      return;
+    }
+    setError('');
+    setIsLoading(true);
+
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const userInfo = {
+      userEmail: user.email || 'anonymous@veritas.ai',
+      userName: user.fullName || 'Anonymous Analyst',
+      organization: user.organization || 'Independent Investigator',
+      analystId: user.email || 'anonymous'
+    };
+
+    try {
+      if (mode === 'summarize') {
+        const res = await factCheckAPI.summarize(text);
+        if (res.success && res.data) {
+          setQuickSummaryResult(res.data);
+        }
+      } else {
+        const res = await factCheckAPI.submit(text, tab, undefined, userInfo);
+        if (res.success && res.data._id) {
+          navigate(`/analysis/${res.data._id}`);
+        }
+      }
+    } catch (err) {
+      setError(err.message || 'Analysis failed. Please check if the backend is running.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
     const user = localStorage.getItem('user');
@@ -53,11 +93,27 @@ export default function CheckNews() {
 
   useEffect(() => {
     if (location.state) {
-      if (location.state.content) setContent(location.state.content);
-      if (location.state.mode) setAnalysisMode(location.state.mode);
-      if (location.state.url && !location.state.content) {
+      const stateContent = location.state.content || location.state.claim || '';
+      const stateMode = location.state.mode || 'verify';
+      const stateUrl = location.state.url;
+      const shouldAutoSubmit = !!location.state.autoSubmit;
+
+      if (stateMode) setAnalysisMode(stateMode);
+
+      if (stateContent) {
+        setContent(stateContent);
+        setActiveTab('text');
+        if (shouldAutoSubmit && !hasAutoSubmitted.current) {
+          hasAutoSubmitted.current = true;
+          executeAnalysis(stateContent, 'text', stateMode);
+        }
+      } else if (stateUrl) {
         setActiveTab('url');
-        setContent(location.state.url);
+        setContent(stateUrl);
+        if (shouldAutoSubmit && !hasAutoSubmitted.current) {
+          hasAutoSubmitted.current = true;
+          executeAnalysis(stateUrl, 'url', stateMode);
+        }
       }
     }
   }, [location.state]);
@@ -111,38 +167,7 @@ export default function CheckNews() {
 
   const handleSubmit = async (e) => {
     e?.preventDefault();
-    if (!content.trim() || content.trim().length < 10) {
-      setError('Please enter at least 10 characters to analyze.');
-      return;
-    }
-    setError('');
-    setIsLoading(true);
-
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
-    const userInfo = {
-      userEmail: user.email || 'anonymous@veritas.ai',
-      userName: user.fullName || 'Anonymous Analyst',
-      organization: user.organization || 'Independent Investigator',
-      analystId: user.email || 'anonymous'
-    };
-
-    try {
-      if (analysisMode === 'summarize') {
-        const res = await factCheckAPI.summarize(content);
-        if (res.success && res.data) {
-          setQuickSummaryResult(res.data);
-        }
-      } else {
-        const res = await factCheckAPI.submit(content, activeTab, undefined, userInfo);
-        if (res.success && res.data._id) {
-          navigate(`/analysis/${res.data._id}`);
-        }
-      }
-    } catch (err) {
-      setError(err.message || 'Analysis failed. Please check if the backend is running.');
-    } finally {
-      setIsLoading(false);
-    }
+    await executeAnalysis(content, activeTab, analysisMode);
   };
 
   const handleEscalateToFullAudit = async () => {
@@ -730,10 +755,14 @@ export default function CheckNews() {
                           className="btn btn-outline btn-sm"
                           style={{ fontSize: 11, padding: '3px 8px', height: 26, flex: 1 }}
                           onClick={() => {
+                            const storyText = story.description && !story.description.startsWith('http')
+                              ? `${story.title}\n\n${story.description}`
+                              : story.title;
                             setActiveTab('text');
-                            setContent(story.description || story.title);
+                            setContent(storyText);
                             setAnalysisMode('summarize');
-                            showToast('Loaded news story into summarizer!');
+                            showToast('Summarizing live news story...');
+                            executeAnalysis(storyText, 'text', 'summarize');
                           }}
                         >
                           Summarize
@@ -743,10 +772,14 @@ export default function CheckNews() {
                           className="btn btn-primary btn-sm"
                           style={{ fontSize: 11, padding: '3px 8px', height: 26, flex: 1 }}
                           onClick={() => {
-                            setActiveTab(story.url ? 'url' : 'text');
-                            setContent(story.url || story.title);
+                            const storyText = story.description && !story.description.startsWith('http')
+                              ? `${story.title}\n\n${story.description}`
+                              : story.title;
+                            setActiveTab('text');
+                            setContent(storyText);
                             setAnalysisMode('verify');
-                            showToast('Loaded news story for fact-checking!');
+                            showToast('Fact-checking live news story...');
+                            executeAnalysis(storyText, 'text', 'verify');
                           }}
                         >
                           Fact Check

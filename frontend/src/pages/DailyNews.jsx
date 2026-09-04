@@ -109,11 +109,13 @@ export default function DailyNews() {
     const cleanTitle = cleanSnippet(story.title);
     const rawDesc = cleanSnippet(story.description);
     const cleanDesc = (rawDesc && !rawDesc.startsWith('http')) ? rawDesc : '';
+    const textToSummarize = cleanDesc ? `${cleanTitle}\n\n${cleanDesc}` : cleanTitle;
 
     navigate('/check', {
       state: {
+        autoSubmit: true,
         mode: 'summarize',
-        content: cleanDesc || cleanTitle,
+        content: textToSummarize,
         title: cleanTitle
       }
     });
@@ -355,6 +357,31 @@ export default function DailyNews() {
                 }}
               >
                 <div>
+                  {/* Article Thumbnail Image */}
+                  {story.imageUrl && (
+                    <div style={{
+                      width: '100%',
+                      height: 165,
+                      borderRadius: 8,
+                      overflow: 'hidden',
+                      marginBottom: 12,
+                      background: 'var(--color-surface-container-high)',
+                      position: 'relative'
+                    }}>
+                      <img
+                        src={story.imageUrl}
+                        alt={story.title}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        onError={(e) => {
+                          if (e.currentTarget.parentElement) {
+                            e.currentTarget.parentElement.style.display = 'none';
+                          }
+                        }}
+                        loading="lazy"
+                      />
+                    </div>
+                  )}
+
                   {/* Publisher & Meta Row */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, fontSize: 12 }}>
                     <span style={{

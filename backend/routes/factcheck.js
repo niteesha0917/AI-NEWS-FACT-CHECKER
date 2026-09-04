@@ -140,15 +140,18 @@ const generateNewsSummary = (content, category, claims = []) => {
 // ─── Multi-Tier Live News Integration (NewsData.io + Currents API + Google News RSS) ─
 const liveNewsCache = new Map();
 
-async function fetchNewsDataIoRaw(query = '', category = '', limit = 10) {
+async function fetchNewsDataIoRaw(query = '', category = '', limit = 10, region = 'india') {
   const apiKey = process.env.NEWSDATA_API_KEY;
   if (!apiKey || apiKey.length < 10) return [];
 
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 4000);
+    const timeoutId = setTimeout(() => controller.abort(), 4500);
 
     let apiUrl = `https://newsdata.io/api/1/latest?apikey=${apiKey}&language=en`;
+    if (region === 'india') {
+      apiUrl += '&country=in';
+    }
     if (query && query.trim().length > 2) {
       const cleanKeywords = query.replace(/[^a-zA-Z0-9\s]/g, ' ').split(/\s+/).filter(w => w.length > 3).slice(0, 3).join(' ');
       if (cleanKeywords) apiUrl += `&q=${encodeURIComponent(cleanKeywords)}`;
@@ -177,7 +180,7 @@ async function fetchNewsDataIoRaw(query = '', category = '', limit = 10) {
           query: query || art.title,
           sourceTitle: art.title,
           title: art.title,
-          publisher: art.source_name || art.source_id || 'NewsData.io Wire',
+          publisher: art.source_name || art.source_id || (region === 'india' ? 'India News Wire' : 'NewsData.io Wire'),
           url: art.link || art.source_url || 'https://newsdata.io',
           publicationDate: art.pubDate ? new Date(art.pubDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'Today',
           pubDate: art.pubDate || new Date().toISOString(),
@@ -199,15 +202,18 @@ async function fetchNewsDataIoRaw(query = '', category = '', limit = 10) {
   return [];
 }
 
-async function fetchCurrentsNews(query = '', category = '', limit = 10) {
+async function fetchCurrentsNews(query = '', category = '', limit = 10, region = 'india') {
   const apiKey = process.env.CURRENTS_API_KEY || process.env.NEWS_API_KEY;
   if (!apiKey || apiKey.length < 10) return [];
 
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 4000);
+    const timeoutId = setTimeout(() => controller.abort(), 4500);
 
     let apiUrl = `https://api.currentsapi.services/v1/latest-news?apiKey=${apiKey}&language=en`;
+    if (region === 'india') {
+      apiUrl += '&country=IN';
+    }
     if (query && query.trim().length > 2) {
       const cleanKeywords = query.replace(/[^a-zA-Z0-9\s]/g, ' ').split(/\s+/).filter(w => w.length > 3).slice(0, 3).join(' ');
       if (cleanKeywords) apiUrl += `&keywords=${encodeURIComponent(cleanKeywords)}`;
@@ -298,7 +304,7 @@ async function fetchGoogleNewsRSS(query = '', category = '', limit = 10, region 
 
     const res = await fetch(url, {
       signal: controller.signal,
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36' }
     });
     clearTimeout(timeoutId);
 
@@ -323,17 +329,24 @@ async function fetchGoogleNewsRSS(query = '', category = '', limit = 10, region 
           rawTitle = parts.join(' - ').trim();
         }
 
-        let cleanDesc = descMatch ? descMatch[1] : '';
-        cleanDesc = cleanDesc
-          .replace(/&lt;/g, '<')
-          .replace(/&gt;/g, '>')
-          .replace(/&quot;/g, '"')
-          .replace(/&#39;/g, "'")
-          .replace(/&amp;/g, '&')
-          .replace(/&nbsp;/g, ' ')
-          .replace(/<[^>]+>/g, ' ')
-          .replace(/\s+/g, ' ')
-          .trim();
+        let cleanDesc = '';
+        if (descMatch) {
+          const rawDesc = descMatch[1];
+          // Google RSS descriptions are often an <ol><li> list of links and headlines.
+          // Extract only the first <li> or clean text to avoid combining 5 unrelated headlines
+          const firstLiMatch = rawDesc.match(/<li[^>]*>([\s\S]*?)<\/li>/i);
+          const targetSnippet = firstLiMatch ? firstLiMatch[1] : rawDesc;
+          cleanDesc = targetSnippet
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&quot;/g, '"')
+            .replace(/&#39;/g, "'")
+            .replace(/&amp;/g, '&')
+            .replace(/&nbsp;/g, ' ')
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+        }
         if (cleanDesc.startsWith('http://') || cleanDesc.startsWith('https://')) {
           cleanDesc = '';
         }
@@ -345,7 +358,7 @@ async function fetchGoogleNewsRSS(query = '', category = '', limit = 10, region 
           query: query || rawTitle,
           sourceTitle: rawTitle,
           title: rawTitle,
-          publisher: publisher || 'News Wire',
+          publisher: publisher || (isIndia ? 'Indian Press Wire' : 'News Wire'),
           url: linkMatch ? linkMatch[1] : 'https://news.google.com',
           publicationDate: pubDateMatch ? new Date(pubDateMatch[1]).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'Today',
           pubDate: pubDateMatch ? pubDateMatch[1] : new Date().toISOString(),
@@ -378,42 +391,30 @@ async function fetchMultiTierNews({ query = '', category = '', limit = 10, regio
   let articles = [];
   let source = 'none';
 
-  // If India region is requested (National / Regional Indian Wire)
-  if (region === 'india') {
-    try {
-      articles = await fetchGoogleNewsRSS(query, category, limit, 'india');
-      if (articles.length > 0) {
-        source = 'google_news_india';
-      }
-    } catch (_) {}
-  }
-
-  // Tier 1: NewsData.io (if configured or global region)
-  if (articles.length === 0) {
-    try {
-      articles = await fetchNewsDataIoRaw(query, category, limit);
-      if (articles.length > 0) {
-        source = 'newsdata.io';
-      }
-    } catch (_) {}
-  }
+  // Tier 1: NewsData.io (Rich articles with images & direct links)
+  try {
+    articles = await fetchNewsDataIoRaw(query, category, limit, region);
+    if (articles.length > 0) {
+      source = 'newsdata.io';
+    }
+  } catch (_) {}
 
   // Tier 2: Currents API (if Tier 1 empty or failed)
   if (articles.length === 0) {
     try {
-      articles = await fetchCurrentsNews(query, category, limit);
+      articles = await fetchCurrentsNews(query, category, limit, region);
       if (articles.length > 0) {
         source = 'currentsapi';
       }
     } catch (_) {}
   }
 
-  // Tier 3: Google News Global RSS (zero-key, live 24/7)
+  // Tier 3: Google News RSS (Live 24/7 fallback)
   if (articles.length === 0) {
     try {
-      articles = await fetchGoogleNewsRSS(query, category, limit, 'global');
+      articles = await fetchGoogleNewsRSS(query, category, limit, region);
       if (articles.length > 0) {
-        source = 'google_news_live';
+        source = region === 'india' ? 'google_news_india' : 'google_news_live';
       }
     } catch (_) {}
   }
@@ -856,7 +857,7 @@ Respond strictly with a valid JSON object ONLY with the following schema:
   "overallExplanation": "<comprehensive breakdown of the verdict and findings>"
 }`;
 
-  const geminiModels = ['gemini-2.0-flash', 'gemini-1.5-flash'];
+  const geminiModels = ['gemini-3.6-flash', 'gemini-flash-latest', 'gemini-3.5-flash'];
 
   for (const model of geminiModels) {
     try {
@@ -1399,6 +1400,60 @@ async function extractContentFromUrl(rawUrl) {
     domain = 'news-publisher.com';
   }
 
+  // Tier 1: Tavily AI Headless Web Extraction (Bypasses bot barriers, paywalls, and SPA javascript)
+  const tavilyKey = process.env.TAVILY_API_KEY;
+  const isGoogleRedirect = /news\.google\.com\/(rss\/)?articles/i.test(url);
+
+  if (tavilyKey && tavilyKey.length > 10 && !isGoogleRedirect) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 7000);
+
+      const tavilyRes = await fetch('https://api.tavily.com/extract', {
+        method: 'POST',
+        signal: controller.signal,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          api_key: tavilyKey,
+          urls: [url]
+        })
+      });
+      clearTimeout(timeoutId);
+
+      if (tavilyRes.ok) {
+        const tavilyData = await tavilyRes.json();
+        const item = tavilyData.results?.[0];
+        if (item && item.raw_content && item.raw_content.length > 80) {
+          // Extract title if present as leading markdown header `# Title`
+          let extractedTitle = '';
+          const h1Match = item.raw_content.match(/^#\s+(.+)$/m);
+          if (h1Match) {
+            extractedTitle = h1Match[1].trim();
+          }
+
+          // Clean markdown links, images, and excessive newlines
+          const cleanBody = item.raw_content
+            .replace(/^#\s+.+$/m, '')
+            .replace(/!\[.*?\]\(.*?\)/g, '')
+            .replace(/\[(.*?)\]\(.*?\)/g, '$1')
+            .replace(/(\r\n|\n|\r){3,}/g, '\n\n')
+            .trim();
+
+          const finalTitle = extractedTitle || pathSlug || `News from ${domain}`;
+          return {
+            title: finalTitle.substring(0, 120),
+            content: `${finalTitle}.\n\n${cleanBody.substring(0, 3000)}`,
+            domain,
+            url,
+          };
+        }
+      }
+    } catch (tavErr) {
+      console.log(`[Tavily Extract Notice]: ${tavErr.message}`);
+    }
+  }
+
+  // Tier 2: Direct HTTP scrape with browser headers
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);
@@ -1406,7 +1461,7 @@ async function extractContentFromUrl(rawUrl) {
     const response = await fetch(url, {
       signal: controller.signal,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 VeritasNewsBot/1.0',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 VeritasNewsBot/1.0',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       }
     });
@@ -1420,6 +1475,11 @@ async function extractContentFromUrl(rawUrl) {
       const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
       if (titleMatch && titleMatch[1]) {
         title = decodeHtmlEntities(titleMatch[1].trim().replace(/\s+/g, ' '));
+      }
+
+      // Suppress generic aggregator title like "Google News"
+      if (title.toLowerCase() === 'google news') {
+        title = '';
       }
 
       // Extract meta description
@@ -1462,7 +1522,7 @@ async function extractContentFromUrl(rawUrl) {
     console.log(`[URL Scraper] Network fetch for ${url} timed out or blocked (${err.message}). Using intelligent slug decomposition.`);
   }
 
-  // Fallback: Generate intelligent article narrative from URL slug and domain
+  // Tier 3: Intelligent article narrative from URL slug and domain
   const words = pathSlug.split(/\s+/).filter(w => w.length > 2 && !/^(news|articles|world|story|post|index|html|php|id|category|page|view|default)$/i.test(w));
   const readableTitle = words.length > 0
     ? words.map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
