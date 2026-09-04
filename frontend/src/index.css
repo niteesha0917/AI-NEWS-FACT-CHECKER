@@ -226,6 +226,9 @@ input, textarea {
   min-height: 100vh;
   padding: var(--spacing-margin-desktop);
   background: var(--color-surface);
+  flex: 1;
+  min-width: 0;
+  width: calc(100% - 280px);
 }
 
 /* ── Component: Sidebar ────────────────────────────────────── */
@@ -239,32 +242,41 @@ input, textarea {
   border-right: 1px solid var(--color-outline-variant);
   display: flex;
   flex-direction: column;
-  padding: 24px;
+  padding: 20px 16px;
   z-index: 50;
   overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.sidebar::-webkit-scrollbar {
+  width: 4px;
+}
+.sidebar::-webkit-scrollbar-thumb {
+  background: var(--color-outline-variant);
+  border-radius: 4px;
 }
 
 .sidebar-logo {
   font-family: var(--font-display);
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 700;
   color: var(--color-primary);
-  margin-bottom: 32px;
+  margin-bottom: 20px;
 }
 
 .sidebar-user {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px;
+  gap: 10px;
+  padding: 10px 12px;
   background: var(--color-surface-container-highest);
   border-radius: var(--radius-xl);
-  margin-bottom: 32px;
+  margin-bottom: 18px;
 }
 
 .sidebar-user-avatar {
-  width: 44px;
-  height: 44px;
+  width: 42px;
+  height: 42px;
   border-radius: 50%;
   overflow: hidden;
   background: var(--color-primary-fixed);
@@ -282,7 +294,7 @@ input, textarea {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 
 .sidebar-nav-label {
@@ -291,18 +303,18 @@ input, textarea {
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--color-outline);
-  padding: 8px 16px;
-  margin-top: 8px;
+  padding: 4px 12px;
+  margin-top: 4px;
 }
 
 .sidebar-nav-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
+  gap: 10px;
+  padding: 9px 12px;
   border-radius: var(--radius-lg);
   color: var(--color-on-surface-variant);
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 500;
   transition: all var(--transition-base);
   cursor: pointer;
@@ -325,13 +337,14 @@ input, textarea {
   justify-content: center;
   gap: 8px;
   width: 100%;
-  padding: 14px;
+  padding: 11px 16px;
   background: var(--color-primary);
   color: var(--color-on-primary);
   border-radius: var(--radius-xl);
   font-weight: 700;
-  font-size: 15px;
-  margin-top: 16px;
+  font-size: 14px;
+  margin-top: 12px;
+  margin-bottom: 8px;
   box-shadow: var(--shadow-md);
   transition: all var(--transition-base);
 }
@@ -348,21 +361,21 @@ input, textarea {
 
 .sidebar-footer {
   margin-top: auto;
-  padding-top: 20px;
+  padding-top: 12px;
   border-top: 1px solid var(--color-outline-variant);
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
 .sidebar-footer-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px 16px;
+  gap: 10px;
+  padding: 7px 12px;
   border-radius: var(--radius-lg);
   color: var(--color-on-surface-variant);
-  font-size: 14px;
+  font-size: 13px;
   transition: all var(--transition-fast);
   cursor: pointer;
 }

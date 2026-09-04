@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: veritas-ai
+    runtime: node
+    plan: free
+    buildCommand: npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: GROQ_API_KEY
+        sync: false
+      - key: TAVILY_API_KEY
+        sync: false
+      - key: NEWSDATA_API_KEY
+        sync: false
+      - key: CURRENTS_API_KEY
+        sync: false
+      - key: MONGODB_URI
+        sync: false

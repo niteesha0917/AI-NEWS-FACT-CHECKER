@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import { factCheckAPI } from '../utils/api';
 
@@ -28,6 +28,7 @@ const ANALYSIS_MODES = [
 
 export default function CheckNews() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState('text');
   const [analysisMode, setAnalysisMode] = useState('verify');
   const [content, setContent] = useState('');
@@ -39,6 +40,8 @@ export default function CheckNews() {
   const [toastMessage, setToastMessage] = useState('');
   const [liveNews, setLiveNews] = useState([]);
   const [loadingNews, setLoadingNews] = useState(false);
+  const [newsCategory, setNewsCategory] = useState('All');
+  const [newsProvider, setNewsProvider] = useState('Live Multi-Tier');
   const fileRef = useRef(null);
 
   useEffect(() => {
@@ -49,20 +52,44 @@ export default function CheckNews() {
   }, [navigate]);
 
   useEffect(() => {
-    const loadFeed = async () => {
-      try {
-        setLoadingNews(true);
-        const res = await factCheckAPI.getLiveFeed();
-        if (res.success && Array.isArray(res.data)) {
-          setLiveNews(res.data);
-        }
-      } catch (_) {}
-      finally {
-        setLoadingNews(false);
+    if (location.state) {
+      if (location.state.content) setContent(location.state.content);
+      if (location.state.mode) setAnalysisMode(location.state.mode);
+      if (location.state.url && !location.state.content) {
+        setActiveTab('url');
+        setContent(location.state.url);
       }
-    };
-    loadFeed();
-  }, []);
+    }
+  }, [location.state]);
+
+  const loadFeed = async (cat = 'All', forceRefresh = false) => {
+    try {
+      setLoadingNews(true);
+      const params = {};
+      if (cat && cat !== 'All') params.category = cat;
+      if (forceRefresh) params.refresh = 'true';
+      const res = await factCheckAPI.getLiveFeed(params);
+      if (res.success && Array.isArray(res.data)) {
+        setLiveNews(res.data);
+        if (res.source) {
+          const providerNames = {
+            'newsdata.io': 'NewsData.io',
+            'currentsapi': 'Currents API',
+            'google_news_live': 'Google Live Wire',
+            'fallback': 'Cached Wire'
+          };
+          setNewsProvider(providerNames[res.source] || res.source);
+        }
+      }
+    } catch (_) {}
+    finally {
+      setLoadingNews(false);
+    }
+  };
+
+  useEffect(() => {
+    loadFeed(newsCategory);
+  }, [newsCategory]);
 
   useEffect(() => {
     let interval;
@@ -601,27 +628,88 @@ export default function CheckNews() {
 
           {/* Sidebar Panel */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-            {/* Live Breaking News Feed (NewsData.io) */}
+            {/* Live Breaking News Feed (Multi-Tier: NewsData.io + Currents + Google News) */}
             <div className="card card-elevated" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-outline-variant)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                 <h3 style={{ fontWeight: 700, fontSize: 14, color: 'var(--color-on-surface)', margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span className="material-symbols-outlined" style={{ fontSize: 18, color: '#dc2626' }}>podcasts</span>
-                  Live News Wire
+                  Daily News Wire
                 </h3>
-                <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, background: '#fee2e2', color: '#dc2626', fontWeight: 700, textTransform: 'uppercase' }}>
-                  Live API
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{
+                    fontSize: 10,
+                    padding: '2px 6px',
+                    borderRadius: 4,
+                    background: newsProvider.includes('NewsData') ? '#eff6ff' : newsProvider.includes('Currents') ? '#f0fdf4' : '#fef2f2',
+                    color: newsProvider.includes('NewsData') ? '#1d4ed8' : newsProvider.includes('Currents') ? '#15803d' : '#b91c1c',
+                    fontWeight: 700,
+                    textTransform: 'uppercase'
+                  }}>
+                    {newsProvider}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => loadFeed(newsCategory, true)}
+                    disabled={loadingNews}
+                    title="Refresh Daily News"
+                    style={{
+                      border: '1px solid var(--color-outline-variant)',
+                      background: 'var(--color-surface-container-low)',
+                      color: 'var(--color-on-surface)',
+                      borderRadius: 6,
+                      width: 26,
+                      height: 26,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: loadingNews ? 'not-allowed' : 'pointer',
+                      padding: 0,
+                    }}
+                  >
+                    <span className="material-symbols-outlined" style={{
+                      fontSize: 15,
+                      animation: loadingNews ? 'spin 1s linear infinite' : 'none'
+                    }}>
+                      refresh
+                    </span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Category Filter Chips */}
+              <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 8, marginBottom: 12 }}>
+                {['All', 'Technology', 'Economy', 'Politics', 'Science', 'Health'].map((cat) => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setNewsCategory(cat)}
+                    style={{
+                      padding: '3px 10px',
+                      borderRadius: 14,
+                      fontSize: 11,
+                      fontWeight: newsCategory === cat ? 700 : 500,
+                      background: newsCategory === cat ? 'var(--color-primary)' : 'var(--color-surface-container-low)',
+                      color: newsCategory === cat ? '#ffffff' : 'var(--color-on-surface-variant)',
+                      border: newsCategory === cat ? '1px solid var(--color-primary)' : '1px solid var(--color-outline-variant)',
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    {cat}
+                  </button>
+                ))}
               </div>
 
               {loadingNews ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {[1, 2, 3].map(i => (
-                    <div key={i} className="skeleton" style={{ height: 60, borderRadius: 8 }} />
+                  {[1, 2, 3, 4].map(i => (
+                    <div key={i} className="skeleton" style={{ height: 68, borderRadius: 8 }} />
                   ))}
                 </div>
               ) : liveNews && liveNews.length > 0 ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {liveNews.slice(0, 4).map((story, idx) => (
+                  {liveNews.slice(0, 5).map((story, idx) => (
                     <div key={idx} style={{
                       padding: 12,
                       background: 'var(--color-surface-container-low)',
@@ -629,12 +717,12 @@ export default function CheckNews() {
                       border: '1px solid var(--color-outline-variant)',
                       fontSize: 12
                     }}>
-                      <div style={{ fontWeight: 600, color: 'var(--color-on-surface)', marginBottom: 4, lineHeight: 1.4 }}>
-                        {story.title?.substring(0, 75)}...
+                      <div style={{ fontWeight: 600, color: 'var(--color-on-surface)', marginBottom: 5, lineHeight: 1.4 }}>
+                        {story.title?.length > 85 ? story.title.substring(0, 85) + '...' : story.title}
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--color-on-surface-variant)', fontSize: 11, marginBottom: 8 }}>
-                        <span>{story.publisher}</span>
-                        <span>{story.category || 'News'}</span>
+                        <span style={{ fontWeight: 600 }}>{story.publisher}</span>
+                        <span>{story.publicationDate || 'Today'}</span>
                       </div>
                       <div style={{ display: 'flex', gap: 6 }}>
                         <button
@@ -668,8 +756,8 @@ export default function CheckNews() {
                   ))}
                 </div>
               ) : (
-                <div style={{ fontSize: 12, color: 'var(--color-on-surface-variant)', textAlign: 'center', padding: '12px 0' }}>
-                  No live news stories retrieved.
+                <div style={{ fontSize: 12, color: 'var(--color-on-surface-variant)', textAlign: 'center', padding: '16px 0' }}>
+                  No live news stories retrieved. Click refresh to retry.
                 </div>
               )}
             </div>

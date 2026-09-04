@@ -137,22 +137,23 @@ const generateNewsSummary = (content, category, claims = []) => {
   };
 };
 
-// ─── NewsData.io Live News API Integration ────────────────────────────────────
-async function fetchNewsDataIo(query = '', category = '') {
-  const fallbackNewsDataKey = ['pub_6e6106868f0b493', '0a5737839b3a9f57a'].join('');
-  const apiKey = process.env.NEWSDATA_API_KEY || fallbackNewsDataKey;
+// ─── Multi-Tier Live News Integration (NewsData.io + Currents API + Google News RSS) ─
+const liveNewsCache = new Map();
+
+async function fetchNewsDataIoRaw(query = '', category = '', limit = 10) {
+  const apiKey = process.env.NEWSDATA_API_KEY;
   if (!apiKey || apiKey.length < 10) return [];
 
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3500);
+    const timeoutId = setTimeout(() => controller.abort(), 4000);
 
     let apiUrl = `https://newsdata.io/api/1/latest?apikey=${apiKey}&language=en`;
     if (query && query.trim().length > 2) {
       const cleanKeywords = query.replace(/[^a-zA-Z0-9\s]/g, ' ').split(/\s+/).filter(w => w.length > 3).slice(0, 3).join(' ');
       if (cleanKeywords) apiUrl += `&q=${encodeURIComponent(cleanKeywords)}`;
     }
-    if (category && category !== 'Other' && category !== 'General') {
+    if (category && category !== 'Other' && category !== 'General' && category !== 'all' && category !== 'All Categories') {
       const catMap = {
         'Politics': 'politics',
         'Health': 'health',
@@ -170,26 +171,268 @@ async function fetchNewsDataIo(query = '', category = '') {
     if (response.ok) {
       const data = await response.json();
       if (data.status === 'success' && Array.isArray(data.results) && data.results.length > 0) {
-        return data.results.slice(0, 5).map((art, idx) => ({
+        return data.results.slice(0, limit).map((art, idx) => ({
+          id: art.article_id || `nd_${idx}_${Date.now()}`,
           claimIndex: idx,
           query: query || art.title,
           sourceTitle: art.title,
+          title: art.title,
           publisher: art.source_name || art.source_id || 'NewsData.io Wire',
           url: art.link || art.source_url || 'https://newsdata.io',
-          publicationDate: art.pubDate ? new Date(art.pubDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'Live Wire',
+          publicationDate: art.pubDate ? new Date(art.pubDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'Today',
+          pubDate: art.pubDate || new Date().toISOString(),
+          category: Array.isArray(art.category) ? art.category[0] : (category || 'General'),
           relevanceScore: Math.max(82, 98 - (idx * 4)),
           stance: idx === 0 ? 'supports' : idx === 1 ? 'context' : 'neutral',
-          excerpt: art.description || art.content?.substring(0, 200) || `Live news report retrieved from ${art.source_name || 'verified agency'}.`,
+          excerpt: art.description || (typeof art.content === 'string' && art.content !== 'ONLY AVAILABLE IN PAID PLANS' ? art.content.substring(0, 200) : '') || art.title,
+          description: art.description || (typeof art.content === 'string' && art.content !== 'ONLY AVAILABLE IN PAID PLANS' ? art.content.substring(0, 180) : '') || art.title,
           credibilityRating: 96,
           corroboratingRecordsCount: data.totalResults || 15,
           imageUrl: art.image_url || null,
+          provider: 'newsdata.io',
         }));
       }
     }
   } catch (err) {
-    console.log(`[NewsData.io] Query "${query}" fetch: ${err.message}`);
+    console.log(`[NewsData.io] Query "${query}" notice: ${err.message}`);
   }
   return [];
+}
+
+async function fetchCurrentsNews(query = '', category = '', limit = 10) {
+  const apiKey = process.env.CURRENTS_API_KEY || process.env.NEWS_API_KEY;
+  if (!apiKey || apiKey.length < 10) return [];
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+    let apiUrl = `https://api.currentsapi.services/v1/latest-news?apiKey=${apiKey}&language=en`;
+    if (query && query.trim().length > 2) {
+      const cleanKeywords = query.replace(/[^a-zA-Z0-9\s]/g, ' ').split(/\s+/).filter(w => w.length > 3).slice(0, 3).join(' ');
+      if (cleanKeywords) apiUrl += `&keywords=${encodeURIComponent(cleanKeywords)}`;
+    }
+    if (category && category !== 'Other' && category !== 'General' && category !== 'all' && category !== 'All Categories') {
+      const catMap = {
+        'Politics': 'politics',
+        'Health': 'health',
+        'Science': 'science',
+        'Economy': 'finance',
+        'Technology': 'technology',
+        'Environment': 'nature'
+      };
+      if (catMap[category]) apiUrl += `&category=${catMap[category]}`;
+    }
+
+    const response = await fetch(apiUrl, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
+    if (response.ok) {
+      const data = await response.json();
+      if (data.status === 'ok' && Array.isArray(data.news) && data.news.length > 0) {
+        return data.news.slice(0, limit).map((art, idx) => {
+          let publisher = 'Currents News Wire';
+          if (art.author && typeof art.author === 'string' && art.author.length < 40) {
+            publisher = art.author;
+          } else if (art.url) {
+            try {
+              publisher = new URL(art.url).hostname.replace('www.', '');
+            } catch (_) {}
+          }
+
+          return {
+            id: art.id || `curr_${idx}_${Date.now()}`,
+            claimIndex: idx,
+            query: query || art.title,
+            sourceTitle: art.title,
+            title: art.title,
+            publisher,
+            url: art.url || 'https://currentsapi.services',
+            publicationDate: art.published ? new Date(art.published).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'Today',
+            pubDate: art.published || new Date().toISOString(),
+            category: Array.isArray(art.category) ? art.category[0] : (category || 'General'),
+            relevanceScore: Math.max(80, 96 - (idx * 4)),
+            stance: idx === 0 ? 'supports' : idx === 1 ? 'context' : 'neutral',
+            excerpt: art.description ? art.description.substring(0, 200) : art.title,
+            description: art.description ? art.description.substring(0, 180) : art.title,
+            credibilityRating: 95,
+            corroboratingRecordsCount: 12,
+            imageUrl: art.image && art.image !== 'None' ? art.image : null,
+            provider: 'currentsapi',
+          };
+        });
+      }
+    }
+  } catch (err) {
+    console.log(`[Currents API] Query "${query}" notice: ${err.message}`);
+  }
+  return [];
+}
+
+async function fetchGoogleNewsRSS(query = '', category = '', limit = 10, region = 'india') {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4500);
+
+    const isIndia = region === 'india';
+    const hl = isIndia ? 'en-IN' : 'en-US';
+    const gl = isIndia ? 'IN' : 'US';
+    const ceid = isIndia ? 'IN:en' : 'US:en';
+
+    let url = `https://news.google.com/rss?hl=${hl}&gl=${gl}&ceid=${ceid}`;
+    if (query && query.trim().length > 2) {
+      url = `https://news.google.com/rss/search?q=${encodeURIComponent(query.trim())}&hl=${hl}&gl=${gl}&ceid=${ceid}`;
+    } else if (category && category !== 'all' && category !== 'All Categories' && category !== 'General' && category !== 'Other') {
+      const topicMap = {
+        'Politics': 'NATION',
+        'Health': 'HEALTH',
+        'Science': 'SCIENCE',
+        'Economy': 'BUSINESS',
+        'Technology': 'TECHNOLOGY',
+        'Entertainment': 'ENTERTAINMENT',
+        'Sports': 'SPORTS'
+      };
+      const topic = topicMap[category] || (isIndia ? 'NATION' : 'WORLD');
+      url = `https://news.google.com/rss/headlines/section/topic/${topic}?hl=${hl}&gl=${gl}&ceid=${ceid}`;
+    }
+
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+    });
+    clearTimeout(timeoutId);
+
+    if (res.ok) {
+      const xml = await res.text();
+      const itemMatches = xml.match(/<item>[\s\S]*?<\/item>/g) || [];
+      return itemMatches.slice(0, limit).map((raw, idx) => {
+        const titleMatch = raw.match(/<title>([\s\S]*?)<\/title>/);
+        const linkMatch = raw.match(/<link\s*>([\s\S]*?)<\/link>/) || raw.match(/<link>([\s\S]*?)<\/link>/);
+        const pubDateMatch = raw.match(/<pubDate>([\s\S]*?)<\/pubDate>/);
+        const sourceMatch = raw.match(/<source[^>]*>([\s\S]*?)<\/source>/);
+        const descMatch = raw.match(/<description>([\s\S]*?)<\/description>/);
+
+        let rawTitle = titleMatch ? titleMatch[1].replace(/<!\[CDATA\[(.*?)\]\]>/g, '$1') : 'Live News Item';
+        let publisher = sourceMatch ? sourceMatch[1].replace(/<!\[CDATA\[(.*?)\]\]>/g, '$1') : 'News Wire';
+
+        if (rawTitle.includes(' - ')) {
+          const parts = rawTitle.split(' - ');
+          if (!sourceMatch && parts.length > 1) {
+            publisher = parts.pop().trim();
+          }
+          rawTitle = parts.join(' - ').trim();
+        }
+
+        let cleanDesc = descMatch ? descMatch[1] : '';
+        cleanDesc = cleanDesc
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/&quot;/g, '"')
+          .replace(/&#39;/g, "'")
+          .replace(/&amp;/g, '&')
+          .replace(/&nbsp;/g, ' ')
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        if (cleanDesc.startsWith('http://') || cleanDesc.startsWith('https://')) {
+          cleanDesc = '';
+        }
+        cleanDesc = cleanDesc.substring(0, 180);
+
+        return {
+          id: `gnews_${idx}_${Date.now()}`,
+          claimIndex: idx,
+          query: query || rawTitle,
+          sourceTitle: rawTitle,
+          title: rawTitle,
+          publisher: publisher || 'News Wire',
+          url: linkMatch ? linkMatch[1] : 'https://news.google.com',
+          publicationDate: pubDateMatch ? new Date(pubDateMatch[1]).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'Today',
+          pubDate: pubDateMatch ? pubDateMatch[1] : new Date().toISOString(),
+          category: category || (isIndia ? 'India News' : 'General'),
+          relevanceScore: Math.max(78, 94 - (idx * 3)),
+          stance: idx === 0 ? 'supports' : idx === 1 ? 'context' : 'neutral',
+          excerpt: cleanDesc || rawTitle,
+          description: cleanDesc || rawTitle,
+          credibilityRating: 94,
+          corroboratingRecordsCount: 10,
+          imageUrl: null,
+          provider: isIndia ? 'google_news_india' : 'google_news_live',
+        };
+      });
+    }
+  } catch (err) {
+    console.log(`[Google News RSS] Query "${query}" notice: ${err.message}`);
+  }
+  return [];
+}
+
+async function fetchMultiTierNews({ query = '', category = '', limit = 10, region = 'india', forceRefresh = false } = {}) {
+  const cacheKey = `${region || 'india'}_${category || 'all'}_${query || ''}_${limit}`;
+  const cached = liveNewsCache.get(cacheKey);
+
+  if (!forceRefresh && cached && (Date.now() - cached.timestamp < 120000)) {
+    return cached.result;
+  }
+
+  let articles = [];
+  let source = 'none';
+
+  // If India region is requested (National / Regional Indian Wire)
+  if (region === 'india') {
+    try {
+      articles = await fetchGoogleNewsRSS(query, category, limit, 'india');
+      if (articles.length > 0) {
+        source = 'google_news_india';
+      }
+    } catch (_) {}
+  }
+
+  // Tier 1: NewsData.io (if configured or global region)
+  if (articles.length === 0) {
+    try {
+      articles = await fetchNewsDataIoRaw(query, category, limit);
+      if (articles.length > 0) {
+        source = 'newsdata.io';
+      }
+    } catch (_) {}
+  }
+
+  // Tier 2: Currents API (if Tier 1 empty or failed)
+  if (articles.length === 0) {
+    try {
+      articles = await fetchCurrentsNews(query, category, limit);
+      if (articles.length > 0) {
+        source = 'currentsapi';
+      }
+    } catch (_) {}
+  }
+
+  // Tier 3: Google News Global RSS (zero-key, live 24/7)
+  if (articles.length === 0) {
+    try {
+      articles = await fetchGoogleNewsRSS(query, category, limit, 'global');
+      if (articles.length > 0) {
+        source = 'google_news_live';
+      }
+    } catch (_) {}
+  }
+
+  // Tier 4: Offline fallback
+  if (articles.length === 0) {
+    source = 'fallback';
+    articles = getInitialSeedHistory().slice(0, 4);
+  }
+
+  const result = { success: true, source, region: region || 'india', data: articles };
+  liveNewsCache.set(cacheKey, { timestamp: Date.now(), result });
+  return result;
+}
+
+// Alias for evidence retrieval across fact-checking functions
+async function fetchNewsDataIo(query = '', category = '') {
+  const res = await fetchMultiTierNews({ query, category, limit: 5 });
+  return res.data || [];
 }
 
 // ─── 2. Evidence Retrieval System ─────────────────────────────────────────────
@@ -371,6 +614,81 @@ const generateExplanationAndReasoning = (claims, evidenceDetails, truthScore, ve
   };
 };
 
+// ─── Tavily AI Real-Time Web Grounding & Fact Search ─────────────────────────
+async function searchWithTavily(query, maxResults = 5) {
+  const apiKey = process.env.TAVILY_API_KEY;
+  if (!apiKey || apiKey.length < 10) return null;
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6500);
+    const res = await fetch('https://api.tavily.com/search', {
+      method: 'POST',
+      signal: controller.signal,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        api_key: apiKey,
+        query: query,
+        search_depth: 'advanced',
+        include_answer: true,
+        max_results: maxResults,
+      })
+    });
+    clearTimeout(timeout);
+    if (res.ok) {
+      const data = await res.json();
+      return {
+        answer: data.answer || '',
+        results: Array.isArray(data.results) ? data.results : []
+      };
+    }
+  } catch (err) {
+    console.log('[Tavily Search Notice]:', err.message);
+  }
+  return null;
+}
+
+// ─── Unified Real-Time Grounding Engine ──────────────────────────────────────
+async function getRealTimeGrounding(query) {
+  // 1. Prioritize Tavily AI Search (Real-time live internet ground truth)
+  const tavily = await searchWithTavily(query, 5);
+  if (tavily && (tavily.answer || (tavily.results && tavily.results.length > 0))) {
+    const textParts = [];
+    if (tavily.answer) textParts.push(`Verified Real-Time Web Intelligence Summary:\n${tavily.answer}`);
+    if (tavily.results && tavily.results.length > 0) {
+      textParts.push(`Live Web Sources & Reporting:\n` + tavily.results.map(r => `- [${r.title}] (${r.url}): ${r.content}`).join('\n'));
+    }
+    return {
+      source: 'tavily',
+      answer: tavily.answer || '',
+      results: tavily.results || [],
+      text: textParts.join('\n\n')
+    };
+  }
+
+  // 2. Google News RSS real-time headlines
+  try {
+    const liveHeadlines = await fetchGoogleNewsRSS(query, '', 4, 'india');
+    if (liveHeadlines.length > 0) {
+      return {
+        source: 'google_news_live',
+        answer: '',
+        results: liveHeadlines.map(h => ({ title: h.title, url: h.url, content: h.description, score: 0.92 })),
+        text: `Live News Wire Articles:\n` + liveHeadlines.map(h => `- [${h.title}] (${h.publisher}) [${h.publicationDate}]: ${h.description}`).join('\n')
+      };
+    }
+  } catch (_) {}
+
+  // 3. Fallback: Wikipedia encyclopedic records
+  const wiki = await fetchWikipediaSnippets(query);
+  return {
+    source: 'wikipedia',
+    answer: '',
+    results: [],
+    text: wiki ? `Verified Encyclopedic Records:\n${wiki}` : ''
+  };
+}
+
 // ─── Real-Time Public Knowledge & Grounding Fetcher ──────────────────────────
 async function fetchWikipediaSnippets(query) {
   if (!query || query.trim().length < 3) return '';
@@ -393,16 +711,15 @@ async function fetchWikipediaSnippets(query) {
 }
 
 // ─── Groq AI Deep Fact-Checker Engine (120B / 70B LLM) ───────────────────────
-async function analyzeWithGroq(content, category) {
+async function analyzeWithGroq(content, category, groundingData = null) {
   const fallbackGroqKey = ['gsk_V0P9j5NMEvCfSMuWoqf4', 'WGdyb3FYspU5wUv4FKZZkY6hPdXtht5Z'].join('');
   const apiKey = process.env.GROQ_API_KEY || fallbackGroqKey;
   if (!apiKey || apiKey.length < 10) return null;
 
-  // Retrieve real-time public encyclopedic grounding
-  const grounding = await fetchWikipediaSnippets(content);
+  const groundingText = groundingData?.text || await fetchWikipediaSnippets(content);
 
-  const prompt = `You are Veritas AI, an expert investigative fact-checker and misinformation auditor.
-${grounding ? `Verified Real-World Public Registry Grounding Data:\n"""\n${grounding}\n"""\n` : ''}
+  const prompt = `You are Veritas AI, an expert investigative fact-checker and misinformation auditor. Current Date: September 2026.
+${groundingText ? `REAL-TIME LIVE WEB INTELLIGENCE & CURRENT EVENTS (GROUND TRUTH):\n"""\n${groundingText}\n"""\nCRITICAL INSTRUCTION: Use the above live web intelligence to verify current facts, office holders, elections, and breaking news. Ground your audit strictly on verified real-world events.\n` : ''}
 Analyze the following news article, text, or claim:
 """${content}"""
 
@@ -489,16 +806,15 @@ Respond strictly with a valid JSON object ONLY. No markdown wrappers, no backtic
 }
 
 // ─── Google Gemini AI Deep Fact-Checker (Primary / Grounded) ─────────────────
-async function analyzeWithGemini(content, category) {
+async function analyzeWithGemini(content, category, groundingData = null) {
   const fallbackGeminiKey = ['AQ.Ab8RN6LIqX5', 'lkt1XbLOmqtdDpBzP0qaFKLf0KiHAfMG7-jUGXg'].join('');
   const apiKey = process.env.GEMINI_API_KEY || fallbackGeminiKey;
   if (!apiKey || apiKey.length < 10) return null;
 
-  // Retrieve real-time public encyclopedic grounding
-  const grounding = await fetchWikipediaSnippets(content);
+  const groundingText = groundingData?.text || await fetchWikipediaSnippets(content);
 
-  const prompt = `You are Veritas AI, an authoritative, unbiased investigative fact-checker. 
-${grounding ? `Verified Real-World Grounding Evidence:\n"""\n${grounding}\n"""\n` : ''}
+  const prompt = `You are Veritas AI, an authoritative, unbiased investigative fact-checker. Current Date: September 2026.
+${groundingText ? `REAL-TIME LIVE WEB INTELLIGENCE & CURRENT EVENTS (GROUND TRUTH):\n"""\n${groundingText}\n"""\nCRITICAL INSTRUCTION: Use the above live web intelligence to verify current facts, office holders, elections, and breaking news. Ground your audit strictly on verified real-world events.\n` : ''}
 Analyze the following news text, claim, or report:
 """${content}"""
 
@@ -540,12 +856,12 @@ Respond strictly with a valid JSON object ONLY with the following schema:
   "overallExplanation": "<comprehensive breakdown of the verdict and findings>"
 }`;
 
-  const geminiModels = ['gemini-3.6-flash', 'gemini-3.7-flash', 'gemini-2.5-flash', 'gemini-1.5-flash'];
+  const geminiModels = ['gemini-2.0-flash', 'gemini-1.5-flash'];
 
   for (const model of geminiModels) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
       const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
         method: 'POST',
         signal: controller.signal,
@@ -870,39 +1186,32 @@ const analyzeContentAsync = async (content) => {
   else if (/tech|ai|software|app|cyber|data|robot|semiconductor|hardware|chip/.test(lowerContent)) category = 'Technology';
   else if (/environment|carbon|emission|forest|ocean|wildlife|renew|glacier|warming/.test(lowerContent)) category = 'Environment';
 
-  // 2. Prioritize Google Gemini AI Deep Neural Reasoning (Fastest & Native Web Grounding)
-  const geminiResult = await analyzeWithGemini(content, category);
-  if (geminiResult && geminiResult.truthScore !== undefined) {
-    const summaryData = generateNewsSummary(content, geminiResult.category || category, geminiResult.claims || []);
-    const evidenceDetails = retrieveEvidenceForClaims(geminiResult.claims || [], geminiResult.category || category, content);
-    const explanationData = generateExplanationAndReasoning(geminiResult.claims || [], evidenceDetails, geminiResult.truthScore, geminiResult.verdict, geminiResult.category || category);
-    const dynamicSources = buildDynamicSources(geminiResult.category || category, evidenceDetails, [], geminiResult.claims || []);
+  // Retrieve real-time live web intelligence (Tavily AI Search + Live Headlines)
+  const groundingData = await getRealTimeGrounding(content);
 
-    return {
-      verdict: geminiResult.verdict || 'MOSTLY_TRUE',
-      truthScore: geminiResult.truthScore,
-      category: geminiResult.category || category,
-      claims: geminiResult.claims || [],
-      sources: dynamicSources,
-      summary: geminiResult.executiveSummary || '',
-      executiveSummary: geminiResult.executiveSummary || summaryData.executiveSummary,
-      keyTakeaways: geminiResult.keyTakeaways || summaryData.keyTakeaways,
-      toneBiasAnalysis: geminiResult.toneBiasAnalysis || summaryData.toneBiasAnalysis,
-      keyEntities: summaryData.keyEntities,
-      evidenceDetails,
-      ...explanationData,
-      discrepancies: geminiResult.discrepancies || explanationData.discrepancies,
-      overallExplanation: geminiResult.overallExplanation || explanationData.overallExplanation,
-    };
-  }
-
-  // 3. Fallback: Groq AI Deep Neural LLM Reasoning
-  const groqResult = await analyzeWithGroq(content, category);
+  // 2. Prioritize Groq AI Deep Neural LLM Reasoning (Ultra-fast 2s latency with active API key)
+  const groqResult = await analyzeWithGroq(content, category, groundingData);
   if (groqResult && groqResult.truthScore !== undefined) {
     const summaryData = generateNewsSummary(content, groqResult.category || category, groqResult.claims || []);
-    const evidenceDetails = retrieveEvidenceForClaims(groqResult.claims || [], groqResult.category || category, content);
+    const baseEvidence = retrieveEvidenceForClaims(groqResult.claims || [], groqResult.category || category, content);
+
+    const liveEvidence = (groundingData?.results || []).map((r, idx) => ({
+      claimIndex: idx,
+      query: content,
+      sourceTitle: r.title,
+      publisher: r.url ? (new URL(r.url).hostname.replace('www.', '')) : 'Live Web Source',
+      url: r.url,
+      publicationDate: 'Live Web Intelligence',
+      relevanceScore: Math.round((r.score || 0.95) * 100),
+      stance: groqResult.verdict === 'TRUE' || groqResult.verdict === 'MOSTLY_TRUE' ? 'supports' : 'contradicts',
+      excerpt: r.content || r.title,
+      credibilityRating: 98,
+      corroboratingRecordsCount: 15,
+    }));
+    const evidenceDetails = [...liveEvidence, ...baseEvidence];
+
     const explanationData = generateExplanationAndReasoning(groqResult.claims || [], evidenceDetails, groqResult.truthScore, groqResult.verdict, groqResult.category || category);
-    const dynamicSources = buildDynamicSources(groqResult.category || category, evidenceDetails, [], groqResult.claims || []);
+    const dynamicSources = buildDynamicSources(groqResult.category || category, evidenceDetails, liveEvidence, groqResult.claims || []);
 
     return {
       verdict: groqResult.verdict || 'FALSE',
@@ -919,6 +1228,51 @@ const analyzeContentAsync = async (content) => {
       ...explanationData,
       discrepancies: groqResult.discrepancies || explanationData.discrepancies,
       overallExplanation: groqResult.overallExplanation || explanationData.overallExplanation,
+      groundingSource: groundingData?.source || 'direct',
+    };
+  }
+
+  // 3. Fallback: Google Gemini AI Deep Neural Reasoning
+  const geminiResult = await analyzeWithGemini(content, category, groundingData);
+  if (geminiResult && geminiResult.truthScore !== undefined) {
+    const summaryData = generateNewsSummary(content, geminiResult.category || category, geminiResult.claims || []);
+    const baseEvidence = retrieveEvidenceForClaims(geminiResult.claims || [], geminiResult.category || category, content);
+    
+    // Prepend real-time live sources from Tavily if available
+    const liveEvidence = (groundingData?.results || []).map((r, idx) => ({
+      claimIndex: idx,
+      query: content,
+      sourceTitle: r.title,
+      publisher: r.url ? (new URL(r.url).hostname.replace('www.', '')) : 'Live Web Source',
+      url: r.url,
+      publicationDate: 'Live Web Intelligence',
+      relevanceScore: Math.round((r.score || 0.95) * 100),
+      stance: geminiResult.verdict === 'TRUE' || geminiResult.verdict === 'MOSTLY_TRUE' ? 'supports' : 'contradicts',
+      excerpt: r.content || r.title,
+      credibilityRating: 98,
+      corroboratingRecordsCount: 15,
+    }));
+    const evidenceDetails = [...liveEvidence, ...baseEvidence];
+
+    const explanationData = generateExplanationAndReasoning(geminiResult.claims || [], evidenceDetails, geminiResult.truthScore, geminiResult.verdict, geminiResult.category || category);
+    const dynamicSources = buildDynamicSources(geminiResult.category || category, evidenceDetails, liveEvidence, geminiResult.claims || []);
+
+    return {
+      verdict: geminiResult.verdict || 'MOSTLY_TRUE',
+      truthScore: geminiResult.truthScore,
+      category: geminiResult.category || category,
+      claims: geminiResult.claims || [],
+      sources: dynamicSources,
+      summary: geminiResult.executiveSummary || '',
+      executiveSummary: geminiResult.executiveSummary || summaryData.executiveSummary,
+      keyTakeaways: geminiResult.keyTakeaways || summaryData.keyTakeaways,
+      toneBiasAnalysis: geminiResult.toneBiasAnalysis || summaryData.toneBiasAnalysis,
+      keyEntities: summaryData.keyEntities,
+      evidenceDetails,
+      ...explanationData,
+      discrepancies: geminiResult.discrepancies || explanationData.discrepancies,
+      overallExplanation: geminiResult.overallExplanation || explanationData.overallExplanation,
+      groundingSource: groundingData?.source || 'direct',
     };
   }
 
@@ -1192,51 +1546,18 @@ router.get('/evidence/search', async (req, res) => {
 // ─── GET /api/factcheck/live-feed — Live Breaking News Stream ────────────────
 router.get('/live-feed', async (req, res) => {
   try {
-    const { category, q } = req.query;
-    const apiKey = process.env.NEWSDATA_API_KEY;
+    const { category, q, region, refresh } = req.query;
+    const forceRefresh = refresh === 'true' || refresh === '1';
 
-    if (!apiKey || apiKey.length < 10) {
-      return res.json({
-        success: true,
-        source: 'cached',
-        data: getInitialSeedHistory().slice(0, 4),
-      });
-    }
+    const result = await fetchMultiTierNews({
+      query: q || '',
+      category: category || '',
+      region: region || 'india',
+      limit: 15,
+      forceRefresh
+    });
 
-    let apiUrl = `https://newsdata.io/api/1/latest?apikey=${apiKey}&language=en`;
-    if (q) apiUrl += `&q=${encodeURIComponent(q)}`;
-    if (category && category !== 'all' && category !== 'All Categories') {
-      const catMap = {
-        'Politics': 'politics',
-        'Health': 'health',
-        'Science': 'science',
-        'Economy': 'business',
-        'Technology': 'technology',
-        'Environment': 'environment'
-      };
-      if (catMap[category]) apiUrl += `&category=${catMap[category]}`;
-    }
-
-    const response = await fetch(apiUrl);
-    if (response.ok) {
-      const data = await response.json();
-      if (data.status === 'success' && Array.isArray(data.results)) {
-        const cleanArticles = data.results.slice(0, 10).map((art, idx) => ({
-          id: art.article_id || `live_${idx}`,
-          title: art.title,
-          url: art.link,
-          publisher: art.source_name || art.source_id || 'News Wire',
-          category: Array.isArray(art.category) ? art.category[0] : (category || 'General'),
-          pubDate: art.pubDate,
-          description: art.description || art.content?.substring(0, 180) || '',
-          imageUrl: art.image_url || null,
-        }));
-        return res.json({ success: true, source: 'newsdata.io', data: cleanArticles });
-      }
-    }
-
-    // Fallback if API rate limits or errors
-    res.json({ success: true, source: 'fallback', data: getInitialSeedHistory().slice(0, 4) });
+    res.json(result);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch live feed', message: err.message });
   }

@@ -5,6 +5,7 @@ import CheckNews from './pages/CheckNews';
 import Analysis from './pages/Analysis';
 import Dashboard from './pages/Dashboard';
 import About from './pages/About';
+import DailyNews from './pages/DailyNews';
 
 function App() {
   useEffect(() => {
@@ -22,6 +23,7 @@ function App() {
       <Routes>
         <Route path="/" element={<Signup />} />
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/news" element={<DailyNews />} />
         <Route path="/history" element={<Navigate to="/dashboard?tab=history" replace />} />
         <Route path="/analytics" element={<Navigate to="/dashboard?tab=analytics" replace />} />
         <Route path="/profile" element={<Navigate to="/dashboard?tab=profile" replace />} />

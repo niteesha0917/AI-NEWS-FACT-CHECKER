@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 
 const navItems = [
   { icon: 'dashboard', label: 'Dashboard', path: '/dashboard' },
+  { icon: 'newspaper', label: 'Daily News', path: '/news', badge: 'LIVE' },
   { icon: 'fact_check', label: 'Check News', path: '/check' },
   { icon: 'history', label: 'History', path: '/dashboard?tab=history' },
   { icon: 'analytics', label: 'Analytics', path: '/dashboard?tab=analytics' },
@@ -108,7 +109,20 @@ export default function Sidebar() {
               role="button"
             >
               <span className="material-symbols-outlined" style={{ fontSize: 22 }}>{item.icon}</span>
-              <span>{item.label}</span>
+              <span style={{ flex: 1 }}>{item.label}</span>
+              {item.badge && (
+                <span style={{
+                  fontSize: 9,
+                  fontWeight: 800,
+                  padding: '2px 6px',
+                  borderRadius: 4,
+                  background: '#fee2e2',
+                  color: '#dc2626',
+                  letterSpacing: '0.04em'
+                }}>
+                  {item.badge}
+                </span>
+              )}
             </div>
           ))}
         </nav>
